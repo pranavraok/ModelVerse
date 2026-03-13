@@ -1,0 +1,13 @@
+await staking.isNodeActive(signer.address)
+await tx.wait()
+const tx = await staking.stake({ value: ethers.parseEther("1") })
+await staking.isNodeActive(signer.address)
+signer.address
+const [signer] = await ethers.getSigners()
+const staking = await ethers.getContractAt("NodeStaking", "0xb938C2C342C1ca0A96DfD9a2a6574a39fC9A90f0")
+await staking.isNodeActive(signer.address)
+await tx.wait();
+await staking.isNodeActive(signer.address)
+signer.address
+const [signer] = await ethers.getSigners();
+const staking = await ethers.getContractAt("NodeStaking", "0xb938C2C342C1ca0A96DfD9a2a6574a39fC9A90f0");

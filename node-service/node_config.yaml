@@ -7,7 +7,7 @@ node:
     - "image_classification"
     - "tabular_regression"
   # How often (seconds) to run the internal healthcheck
-  healthcheck_interval_seconds: 10
+  healthcheck_interval_seconds: 600
 
 performance:
   # Maximum total disk space (MB) that the local model cache may use
