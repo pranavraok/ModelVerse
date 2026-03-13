@@ -61,8 +61,8 @@ export default function SelectRolePage() {
     
     setIsLoading(true)
     
-    // Save role to localStorage (in real app, this would be server-side)
-    localStorage.setItem('userRole', selectedRole)
+    // Keep selected role for signup/login prefill.
+    localStorage.setItem('pendingRole', selectedRole)
     
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 500))

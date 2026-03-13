@@ -76,6 +76,7 @@ class SignupRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     email: str
     password: str = Field(min_length=8)
+    role: Literal["creator", "buyer", "node-operator"]
 
 
 class LoginRequest(BaseModel):
@@ -329,7 +330,7 @@ def auth_signup(payload: SignupRequest):
             {
                 "email": payload.email,
                 "password": payload.password,
-                "options": {"data": {"name": payload.name}},
+                "options": {"data": {"name": payload.name, "role": payload.role}},
             }
         )
     except Exception as exc:
