@@ -48,6 +48,8 @@ def test_decode_input_image() -> None:
 
 @pytest.mark.asyncio
 async def test_job_client_next_job_and_send_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict = {}
+
     class FakeWS:
         def __init__(self) -> None:
             self.sent_messages: list[dict] = []
@@ -79,7 +81,8 @@ async def test_job_client_next_job_and_send_result(monkeypatch: pytest.MonkeyPat
             self.ws = FakeWS()
 
         async def ws_connect(self, url: str, headers=None):
-            _ = (url, headers)
+            captured["url"] = url
+            captured["headers"] = headers or {}
             return self.ws
 
         async def close(self) -> None:
@@ -87,9 +90,19 @@ async def test_job_client_next_job_and_send_result(monkeypatch: pytest.MonkeyPat
 
     fake_session = FakeSession()
     monkeypatch.setattr("job_client.aiohttp.ClientSession", lambda: fake_session)
+    monkeypatch.setenv("COORDINATOR_AUTH_MODE", "header")
+    monkeypatch.setenv("COORDINATOR_AUTH_TOKEN", "test-api-key")
+    monkeypatch.setenv("BACKEND_API_KEY_HEADER", "x-node-api-key")
 
-    client = JobClient("ws://localhost:8000/ws/jobs", "token-123")
+    client = JobClient(
+        "ws://localhost:8000/ws/jobs",
+        "test-api-key",
+        wallet_address="0x2222222222222222222222222222222222222222",
+    )
     await client.connect()
+
+    assert captured["headers"]["x-wallet-address"] == "0x2222222222222222222222222222222222222222"
+    assert captured["headers"]["x-node-api-key"] == "test-api-key"
 
     job = await client.next_job()
     assert job is not None
