@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any, Literal
 from contextlib import suppress
+from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, HTTPException, Header, Query, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -86,6 +87,12 @@ class LoginRequest(BaseModel):
 
 class SelectRoleRequest(BaseModel):
     role: Literal["creator", "buyer", "node-operator"]
+
+
+class OAuthStartRequest(BaseModel):
+    provider: Literal["google", "github"]
+    role: Literal["creator", "buyer", "node-operator"]
+    mode: Literal["signup", "login"] = "login"
 
 
 def _response_to_dict(response: Any) -> dict[str, Any]:
@@ -425,6 +432,24 @@ def auth_select_role(
             "name": new_metadata.get("name"),
             "role": payload.role,
         },
+    }
+
+
+@app.post("/auth/oauth/start")
+def auth_oauth_start(payload: OAuthStartRequest):
+    frontend_base_url = os.getenv("FRONTEND_URL", "http://127.0.0.1:3000")
+    redirect_url = f"{frontend_base_url}/login?role={payload.role}&mode={payload.mode}&provider={payload.provider}"
+    encoded_redirect = quote(redirect_url, safe="")
+    provider_extra = "&prompt=select_account" if payload.provider == "google" else ""
+    oauth_url = (
+        f"{url}/auth/v1/authorize?provider={payload.provider}&redirect_to={encoded_redirect}{provider_extra}"
+    )
+    return {
+        "oauth_url": oauth_url,
+        "redirect_to": redirect_url,
+        "provider": payload.provider,
+        "role": payload.role,
+        "mode": payload.mode,
     }
 
 @app.get("/health")

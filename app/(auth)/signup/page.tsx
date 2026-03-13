@@ -1,15 +1,14 @@
 "use client"
 
-import { useMemo, useState, Suspense } from "react"
+import { useEffect, useMemo, useState, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Cpu, Eye, EyeOff, ArrowRight } from "lucide-react"
+import { Cpu, Eye, EyeOff, ArrowRight, CheckCircle2, Mail } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Slider } from "@/components/ui/slider"
-import type { UserRole } from "@/lib/auth-api"
+import { getOAuthStartUrl, signupWithRole, type UserRole } from "@/lib/auth-api"
 
 const roleLabels: Record<UserRole, string> = {
   creator: "Creator",
@@ -31,11 +30,8 @@ function SignupForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
-  
-  // Node Operator specifics
-  const [showNodeModal, setShowNodeModal] = useState(false)
-  const [nodeName, setNodeName] = useState("My Laptop Node")
-  const [stakeAmount, setStakeAmount] = useState([10])
+  const [showVerificationModal, setShowVerificationModal] = useState(false)
+  const [redirectCountdown, setRedirectCountdown] = useState(5)
   
   const [formData, setFormData] = useState({
     name: "",
@@ -43,40 +39,76 @@ function SignupForm() {
     password: ""
   })
 
-  // Handles finishing the local signup process or showing the node setup modal.
-  const handleAuthAction = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
+  useEffect(() => {
+    if (!showVerificationModal) return
+    if (redirectCountdown <= 0) return
+
+    const timer = window.setTimeout(() => {
+      setRedirectCountdown((prev) => prev - 1)
+    }, 1000)
+
+    return () => window.clearTimeout(timer)
+  }, [showVerificationModal, redirectCountdown])
+
+  useEffect(() => {
+    if (!showVerificationModal) return
+    if (redirectCountdown !== 0) return
+    router.push(`/login?role=${selectedRole}`)
+  }, [showVerificationModal, redirectCountdown, router, selectedRole])
+
+  const handleManualSignup = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (selectedRole === "creator") {
+      setErrorMessage("Creator accounts can only be created with GitHub.")
+      return
+    }
+
     setErrorMessage("")
     setIsLoading(true)
-    
-    // Simulate API call for form validation / social auth init
-    await new Promise(resolve => setTimeout(resolve, 800))
-    
-    if (selectedRole === "node-operator") {
+
+    try {
+      await signupWithRole({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: selectedRole,
+      })
+
+      localStorage.setItem("pendingRole", selectedRole)
+      setRedirectCountdown(5)
+      setShowVerificationModal(true)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Signup failed")
+    } finally {
       setIsLoading(false)
-      setShowNodeModal(true)
-    } else {
-      finalizeSignup()
     }
   }
 
-  // Completes the final redirect
-  const finalizeSignup = async () => {
-    setIsLoading(true);
-    // Simulate final API registration step
-    await new Promise(resolve => setTimeout(resolve, 800))
-    setIsLoading(false)
+  const handleSocialSignup = async (provider: "google" | "github") => {
+    setErrorMessage("")
 
-    // Store user data temporarily (in real app, this would be server-side)
-    localStorage.setItem('pendingUser', JSON.stringify({ ...formData, role: selectedRole }))
-    
-    // Redirect based on role
-    if (selectedRole === "creator") {
-      router.push('/creator')
-    } else if (selectedRole === "buyer") {
-      router.push('/buyer')
-    } else {
-      router.push('/node-operator')
+    if (selectedRole === "creator" && provider !== "github") {
+      setErrorMessage("Creator accounts can only be created with GitHub.")
+      return
+    }
+
+    if ((selectedRole === "buyer" || selectedRole === "node-operator") && provider === "github") {
+      setErrorMessage("GitHub signup is available only for creator accounts.")
+      return
+    }
+
+    localStorage.setItem("pendingRole", selectedRole)
+
+    try {
+      const { oauth_url } = await getOAuthStartUrl({
+        provider,
+        role: selectedRole,
+        mode: "signup",
+      })
+      window.location.assign(oauth_url)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to start social signup")
     }
   }
 
@@ -98,7 +130,8 @@ function SignupForm() {
         </div>
 
         <div className="relative rounded-3xl border border-border/50 bg-card/40 px-8 py-10 shadow-2xl backdrop-blur-xl">
-          <form onSubmit={handleAuthAction} className="space-y-6">
+          {selectedRole !== "creator" && (
+            <form onSubmit={handleManualSignup} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="name" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Full Name</Label>
               <Input
@@ -151,12 +184,6 @@ function SignupForm() {
               </p>
             </div>
 
-            {errorMessage && (
-              <p className="rounded-lg border border-red-400/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                {errorMessage}
-              </p>
-            )}
-
             <Button 
               type="submit" 
               className="w-full h-12 rounded-xl bg-linear-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all hover:shadow-[0_0_25px_rgba(139,92,246,0.5)] font-medium text-lg mt-4"
@@ -171,7 +198,17 @@ function SignupForm() {
                 </>
               )}
             </Button>
-          </form>
+            </form>
+          )}
+
+          {selectedRole === "creator" && (
+            <div className="rounded-2xl border border-primary/30 bg-primary/10 p-5">
+              <p className="text-sm font-semibold text-foreground">Creator account creation is GitHub-only</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Use GitHub to create your creator account. Manual and Google signup are disabled for this role.
+              </p>
+            </div>
+          )}
 
           <div className="mt-8">
             <div className="relative">
@@ -179,14 +216,18 @@ function SignupForm() {
                 <div className="w-full border-t border-border/50" />
               </div>
               <div className="relative flex justify-center text-xs uppercase tracking-wider">
-                <span className="bg-card/40 px-3 text-muted-foreground font-semibold backdrop-blur-md">Or continue with</span>
+                <span className="bg-card/40 px-3 text-muted-foreground font-semibold backdrop-blur-md">
+                  {selectedRole === "creator" ? "Continue with" : "Or continue with"}
+                </span>
               </div>
             </div>
 
-            <div className={`mt-6 grid gap-4 ${selectedRole === "buyer" ? "grid-cols-1" : "grid-cols-2"}`}>
+            <div className={`mt-6 grid gap-4 ${selectedRole === "creator" ? "grid-cols-1" : "grid-cols-1"}`}>
+              {selectedRole !== "creator" && (
               <Button 
+                type="button"
                 variant="outline" 
-                onClick={() => handleAuthAction()}
+                onClick={() => handleSocialSignup("google")}
                 disabled={isLoading}
                 className="h-12 rounded-xl border-border/50 bg-background/30 hover:bg-background/50 hover:border-border/80 transition-all">
                 <svg className="mr-2 h-4 w-4 text-foreground/80" viewBox="0 0 24 24">
@@ -197,10 +238,12 @@ function SignupForm() {
                 </svg>
                 Google
               </Button>
-              {selectedRole !== "buyer" && (
+              )}
+              {selectedRole === "creator" && (
                 <Button 
+                  type="button"
                   variant="outline" 
-                  onClick={() => handleAuthAction()}
+                  onClick={() => handleSocialSignup("github")}
                   disabled={isLoading}
                   className="h-12 rounded-xl border-border/50 bg-background/30 hover:bg-background/50 hover:border-border/80 transition-all">
                   <svg className="mr-2 h-4 w-4 text-foreground/80" fill="currentColor" viewBox="0 0 24 24">
@@ -210,6 +253,12 @@ function SignupForm() {
                 </Button>
               )}
             </div>
+
+            {errorMessage && (
+              <p className="mt-4 rounded-lg border border-red-400/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {errorMessage}
+              </p>
+            )}
           </div>
           
           <p className="mt-6 text-center text-[11px] text-muted-foreground/80 max-w-[80%] mx-auto">
@@ -232,63 +281,35 @@ function SignupForm() {
         </p>
       </div>
 
-      {/* Node Operator Setup Modal */}
-      <Dialog open={showNodeModal} onOpenChange={setShowNodeModal}>
-        <DialogContent className="sm:max-w-106.25">
+      <Dialog open={showVerificationModal} onOpenChange={setShowVerificationModal}>
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Configure Your Node</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              Verify Your Email
+            </DialogTitle>
             <DialogDescription>
-              We&apos;ve auto-detected your system hardware. Customize your node name and set your initial stake to proceed.
+              We sent a verification link to your email. Please verify your account before signing in.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-6 py-4">
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/10 border border-primary/20">
-              <Cpu className="h-5 w-5 text-primary" />
+          <div className="grid gap-4 py-4">
+            <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/10 p-4">
+              <Mail className="h-5 w-5 text-primary" />
               <div>
-                <p className="text-sm font-medium">Auto-detected Hardware</p>
-                <p className="text-xs text-muted-foreground">CPU cores = 8, RAM = 16GB</p>
+                <p className="text-sm font-medium">Check your inbox and spam folder</p>
+                <p className="text-xs text-muted-foreground">After email verification, continue with login.</p>
               </div>
             </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="node-name">Node Name</Label>
-              <Input
-                id="node-name"
-                value={nodeName}
-                onChange={(e) => setNodeName(e.target.value)}
-                placeholder="e.g. My Awesome Node"
-              />
-            </div>
-            
-            <div className="grid gap-4">
-              <div className="flex items-center justify-between">
-                <Label>Set Stake</Label>
-                <span className="text-sm font-medium text-primary">{stakeAmount[0]} MATIC</span>
-              </div>
-              <Slider
-                value={stakeAmount}
-                onValueChange={setStakeAmount}
-                max={100}
-                min={10}
-                step={5}
-                className="my-2"
-              />
-              <p className="text-xs text-muted-foreground">
-                Minimum stake is 10 MATIC to ensure network security.
-              </p>
+            <div className="rounded-xl border border-border/50 bg-background/40 px-4 py-3 text-sm">
+              Redirecting to login in <span className="font-semibold text-primary">{redirectCountdown}</span> second{redirectCountdown === 1 ? "" : "s"}.
             </div>
           </div>
           <DialogFooter>
             <Button 
-               className="w-full bg-primary hover:bg-primary/90" 
-               onClick={finalizeSignup}
-               disabled={isLoading}
+               className="w-full bg-primary hover:bg-primary/90"
+               onClick={() => router.push(`/login?role=${selectedRole}`)}
             >
-              {isLoading ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-              ) : (
-                "Complete Setup"
-              )}
+              Go to Login Now
             </Button>
           </DialogFooter>
         </DialogContent>
