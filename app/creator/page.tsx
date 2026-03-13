@@ -2,6 +2,7 @@
 
 import { DashboardHeader } from "@/components/dashboard/header"
 import { Card } from "@/components/ui/card"
+import { RegisterModelForm } from "@/components/RegisterModelForm"
 import { 
   Package, 
   Play, 
@@ -264,6 +265,11 @@ export default function CreatorDashboard() {
             </div>
           </div>
         </Card>
+
+        {/* Register Model Form Section */}
+        <div className="mt-8">
+          <RegisterModelForm />
+        </div>
       </div>
     </div>
   )
