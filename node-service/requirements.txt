@@ -1,27 +1,21 @@
-# ── Async HTTP & WebSockets ──────────────────────────────────────────────────
-aiohttp>=3.9.0          # Async HTTP client (IPFS fallback support)
-httpx>=0.27.0            # Async-capable HTTP client
-websockets>=12.0         # WebSocket client for coordinator events
+# Backend (main.py)
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+supabase>=2.3.0
+python-multipart>=0.0.9
 
-# ── Core Numeric / Inference Utilities ───────────────────────────────────────
-numpy>=1.26.0            # Tensor and numeric ops for ONNX inputs/outputs
-Pillow>=10.0.0           # PIL image preprocessing for classify_image
-web3>=6.18.0             # Contract client scaffolding
-
-# ── Environment & Configuration ──────────────────────────────────────────────
-python-dotenv>=1.0.0     # Loads .env files into os.environ
-pydantic>=2.6.0          # Typed settings / data validation
-pydantic-settings>=2.2.0 # BaseSettings integration for pydantic v2
-
-# ── YAML Config ───────────────────────────────────────────────────────────────
-pyyaml>=6.0.1            # Parse node_config.yaml
-
-# ── Logging Utilities ─────────────────────────────────────────────────────────
-rich>=13.7.0             # Pretty console output & log highlighting
-
-# ── ONNX Inference Runtime ────────────────────────────────────────────────────
-onnxruntime>=1.17.0      # CPU-only ONNX model inference (no GPU extras)
-
-# ── Testing ───────────────────────────────────────────────────────────────────
-pytest>=8.1.0            # Test runner
-pytest-asyncio>=0.23.0   # async test support
+# Node daemon / shared
+aiohttp>=3.9.0
+httpx>=0.27.0
+websockets>=12.0
+numpy>=1.24.0
+Pillow>=10.0.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.2.0
+pyyaml>=6.0.1
+onnxruntime>=1.16.0
+cryptography>=41.0.0
+rich>=13.7.0
+pytest>=8.1.0
+pytest-asyncio>=0.23.0

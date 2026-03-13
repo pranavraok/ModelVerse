@@ -1,3 +1,4 @@
+#job_client.py
 """WebSocket job client for coordinator-driven node assignments."""
 
 from __future__ import annotations
@@ -97,20 +98,22 @@ def decrypt_input(encrypted_base64: str, job_id: str | int) -> bytes:
         raise ValueError(f"Failed to decrypt input payload for job_id={job_id}: {exc}") from exc
 
 
-def decode_input_image(job: JobPayload) -> Image.Image:
-    """Decrypt input_base64 and decode it into PIL.Image for model inference."""
+# Replace decode_input_image entirely:
+def decode_input_image(job: "JobPayload") -> "Image.Image":
+    """Plain base64 decode — NO encryption for hackathon."""
+    from PIL import Image
     if not job.input_base64:
         raise ValueError("input_base64 missing in job payload")
-
     try:
-        raw = decrypt_input(job.input_base64, job.job_id)
+        raw = base64.b64decode(job.input_base64)
         image = Image.open(io.BytesIO(raw))
         image.load()
         if image.mode != "RGB":
             image = image.convert("RGB")
         return image
-    except Exception as exc:  # noqa: BLE001
-        raise ValueError(f"Failed to decode input image: {exc}") from exc
+    except Exception as exc:
+        raise ValueError(f"Failed to decode image: {exc}") from exc
+
 
 
 class JobClient:
