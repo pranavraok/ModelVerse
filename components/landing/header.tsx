@@ -50,7 +50,7 @@ export function Header() {
             </Button>
           </Link>
           <Link href="/select-role">
-            <Button size="sm" className="bg-primary hover:bg-primary/90">
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_15px_rgba(139,92,246,0.3)] hover:shadow-[0_0_25px_rgba(139,92,246,0.5)] transition-all">
               Get Started
             </Button>
           </Link>
@@ -105,7 +105,8 @@ export function Header() {
                 <Button variant="ghost" className="w-full">Login</Button>
               </Link>
               <Link href="/select-role">
-                <Button className="w-full bg-primary hover:bg-primary/90">Get Started</Button>
+                <Button className="w-full bg-primary hover:bg-primary/90 mt-2">
+                  Get Started</Button>
               </Link>
             </div>
           </div>

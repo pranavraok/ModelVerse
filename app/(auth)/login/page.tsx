@@ -351,7 +351,11 @@ export default function LoginPage() {
         <p className="mt-8 text-center text-sm text-muted-foreground/80">
           Don&apos;t have an account?{" "}
           <Link href="/select-role" className="font-semibold text-foreground hover:text-primary transition-colors">
+<<<<<<< HEAD
             Sign up for free
+=======
+            Sign up here free
+>>>>>>> 0c1eeb274c893e479d968e16f05ce87559b14833
           </Link>
         </p>
       </div>
