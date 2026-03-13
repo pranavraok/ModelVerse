@@ -61,8 +61,8 @@ export default function SelectRolePage() {
     
     setIsLoading(true)
     
-    // Save role to localStorage (in real app, this would be server-side)
-    localStorage.setItem('userRole', selectedRole)
+    // Keep selected role for signup/login prefill.
+    localStorage.setItem('pendingRole', selectedRole)
     
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 500))
@@ -75,8 +75,8 @@ export default function SelectRolePage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
       {/* Background effects */}
       <div className="fixed inset-0 -z-10">
-        <div className="absolute top-1/4 left-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-[120px]" />
-        <div className="absolute bottom-1/4 right-1/4 h-[400px] w-[400px] rounded-full bg-accent/10 blur-[100px]" />
+        <div className="absolute top-1/4 left-1/2 h-150 w-150 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-[120px]" />
+        <div className="absolute bottom-1/4 right-1/4 h-100 w-100 rounded-full bg-accent/10 blur-[100px]" />
       </div>
 
       <div className="w-full max-w-6xl z-10">
@@ -118,7 +118,7 @@ export default function SelectRolePage() {
               )}
 
               {/* Icon */}
-              <div className={`mb-4 inline-flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br ${role.gradient}`}>
+              <div className={`mb-4 inline-flex h-14 w-14 items-center justify-center rounded-xl bg-linear-to-br ${role.gradient}`}>
                 <role.icon className="h-7 w-7 text-foreground" />
               </div>
 

@@ -45,7 +45,7 @@ function SpotlightCard({ children, className = "" }: { children: React.ReactNode
 
   return (
     <div
-      className={`relative group overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] backdrop-blur-xl shadow-2xl transition-all duration-500 hover:border-white/20 hover:bg-white/[0.04] p-8 ${className}`}
+      className={`relative group overflow-hidden rounded-3xl border border-white/10 bg-white/2 backdrop-blur-xl shadow-2xl transition-all duration-500 hover:border-white/20 hover:bg-white/4 p-8 ${className}`}
       onMouseMove={handleMouseMove}
     >
       <motion.div
@@ -82,7 +82,7 @@ export function Hero() {
         
         {/* Dynamic Structural Grid (Perspective) */}
         <div className="absolute inset-0 perspective-[1000px] pointer-events-none opacity-30">
-           <div className="absolute inset-0 origin-bottom [transform:rotateX(60deg)_scale(2.5)] bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:linear-gradient(to_top,black,transparent)] animate-[grid-move_20s_linear_infinite]" />
+           <div className="absolute inset-0 origin-bottom transform-[rotateX(60deg)_scale(2.5)] bg-[linear-gradient(rgba(255,255,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.1)_1px,transparent_1px)] bg-size-[4rem_4rem] mask-[linear-gradient(to_top,black,transparent)] animate-[grid-move_20s_linear_infinite]" />
         </div>
 
         <style dangerouslySetInnerHTML={{__html: `
@@ -101,7 +101,7 @@ export function Hero() {
         `}} />
 
         {/* Center Spotlight */}
-        <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 h-[80vh] w-[60vw] bg-radial-gradient from-white/10 to-transparent blur-[100px] pointer-events-none pointer-events-none" />
+        <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 h-[80vh] w-[60vw] bg-radial-gradient from-white/10 to-transparent blur-[100px] pointer-events-none" />
       </div>
 
       <div className="mx-auto w-full max-w-7xl px-6 lg:px-8 flex flex-col items-center relative z-10">
@@ -121,12 +121,12 @@ export function Hero() {
           {/* Subtle glow behind the main text */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[120%] bg-blue-500/10 blur-[100px] -z-10 rounded-[100%] pointer-events-none" />
           
-          <motion.span variants={slideUpVariant} className="block mb-2 text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-100 to-indigo-200 drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+          <motion.span variants={slideUpVariant} className="block mb-2 text-transparent bg-clip-text bg-linear-to-r from-white via-blue-100 to-indigo-200 drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
             Discover Every Model.
           </motion.span>
           
           <motion.span variants={slideUpVariant} className="block relative">
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-purple-300 to-white drop-shadow-[0_0_15px_rgba(167,139,250,0.3)]">
+            <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-200 via-purple-300 to-white drop-shadow-[0_0_15px_rgba(167,139,250,0.3)]">
               Deploy With{" "}
             </span>
             <span className="relative inline-block text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.5)]">
@@ -151,7 +151,7 @@ export function Hero() {
                 />
               </svg>
             </span>
-            <span className="text-transparent bg-clip-text bg-gradient-to-b from-white to-white/50">.</span>
+            <span className="text-transparent bg-clip-text bg-linear-to-b from-white to-white/50">.</span>
           </motion.span>
         </motion.h1>
 
@@ -162,7 +162,7 @@ export function Hero() {
 
         {/* Search Bar matching image */}
         <div className="relative w-full max-w-2xl group mt-2">
-          <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-primary/30 via-accent/30 to-blue-500/30 opacity-40 blur-md group-hover:opacity-70 transition duration-500" />
+          <div className="absolute -inset-1 rounded-full bg-linear-to-r from-primary/30 via-accent/30 to-blue-500/30 opacity-40 blur-md group-hover:opacity-70 transition duration-500" />
           <div className="relative flex items-center w-full rounded-full border border-white/10 bg-black/40 backdrop-blur-xl px-4 py-3 shadow-2xl transition-all group-hover:bg-black/50">
             <Plus className="h-5 w-5 text-muted-foreground mx-2" />
             <input 
@@ -182,30 +182,30 @@ export function Hero() {
         {/* Central Display Card (Comparison Style) */}
         <div className="relative w-full max-w-5xl mt-24 mb-16">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-[98%] z-10">
-             <div className="rounded-t-3xl border border-b-0 border-white/5 bg-white/[0.02] px-16 sm:px-24 py-3 backdrop-blur-xl shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.5)] flex items-center justify-center">
+             <div className="rounded-t-3xl border border-b-0 border-white/5 bg-white/2 px-16 sm:px-24 py-3 backdrop-blur-xl shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.5)] flex items-center justify-center">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 whitespace-nowrap">
                   Network Model Comparison
                 </span>
              </div>
           </div>
 
-          <div className="relative rounded-[2rem] border border-white/10 bg-white/[0.03] backdrop-blur-2xl p-6 sm:p-10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)]">
-            <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
+          <div className="relative rounded-4xl border border-white/10 bg-white/3 backdrop-blur-2xl p-6 sm:p-10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)]">
+            <div className="absolute inset-0 rounded-4xl bg-linear-to-b from-white/5 to-transparent pointer-events-none" />
             
             <div className="grid grid-cols-1 overflow-hidden md:grid-cols-2 gap-8 relative items-center">
               
               {/* Central vs Badge */}
-              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 hidden md:flex h-16 w-16 items-center justify-center rounded-full border-4 border-background bg-gradient-to-br from-primary to-accent shadow-[0_0_30px_-5px_var(--primary)] text-white">
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20 hidden md:flex h-16 w-16 items-center justify-center rounded-full border-4 border-background bg-linear-to-br from-primary to-accent shadow-[0_0_30px_-5px_var(--primary)] text-white">
                 <Bot className="h-7 w-7" />
               </div>
 
               {/* Left Item */}
               <SpotlightCard className="shadow-inner relative z-10 w-full">
-                 <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-3xl pointer-events-none" />
+                 <div className="absolute inset-0 bg-linear-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-3xl pointer-events-none" />
                  
                  <div className="relative flex items-center justify-between mb-8">
                    <div className="flex items-center gap-4">
-                     <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary shadow-inner border border-primary/20 overflow-hidden">
+                     <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-primary/20 to-primary/5 text-primary shadow-inner border border-primary/20 overflow-hidden">
                        <div className="absolute inset-0 bg-primary/20 hover:bg-primary/30 blur-xl transition-colors rounded-full" />
                        <Zap className="h-6 w-6 relative z-10 group-hover:scale-110 transition-transform duration-500" />
                      </div>
@@ -223,7 +223,7 @@ export function Hero() {
                  
                  <div className="flex justify-between items-end mb-8 relative">
                     <div>
-                      <p className="text-4xl font-medium text-white tracking-tight group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-white group-hover:to-white/50 transition-all duration-300">$0.15<span className="text-base text-muted-foreground font-normal group-hover:text-white/40">/1M</span></p>
+                      <p className="text-4xl font-medium text-white tracking-tight group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-linear-to-r group-hover:from-white group-hover:to-white/50 transition-all duration-300">$0.15<span className="text-base text-muted-foreground font-normal group-hover:text-white/40">/1M</span></p>
                       <p className="text-[10px] text-muted-foreground mt-1.5 uppercase tracking-[0.15em] flex items-center gap-2">
                         Inference Fee
                       </p>
@@ -242,7 +242,7 @@ export function Hero() {
                            initial={{ width: "0%" }}
                            animate={{ width: "92%" }}
                            transition={{ duration: 5, ease: "easeOut" }}
-                           className="absolute top-0 left-0 h-full bg-gradient-to-r from-primary/80 via-accent to-primary/80 rounded-full bg-[length:200%_100%] shadow-[0_0_15px_rgba(139,92,246,0.6)]" 
+                           className="absolute top-0 left-0 h-full bg-linear-to-r from-primary/80 via-accent to-primary/80 rounded-full bg-size-[200%_100%] shadow-[0_0_15px_rgba(139,92,246,0.6)]" 
                          />
                       </div>
                       
@@ -252,7 +252,7 @@ export function Hero() {
                            initial={{ width: "0%" }}
                            animate={{ width: "76%" }}
                            transition={{ duration: 5, ease: "easeInOut", delay: 0.2 }}
-                           className="absolute top-0 left-0 h-full bg-gradient-to-r from-primary/60 via-purple-400 to-primary/60 rounded-full bg-[length:200%_100%] shadow-[0_0_10px_rgba(139,92,246,0.4)]" 
+                           className="absolute top-0 left-0 h-full bg-linear-to-r from-primary/60 via-purple-400 to-primary/60 rounded-full bg-size-[200%_100%] shadow-[0_0_10px_rgba(139,92,246,0.4)]" 
                          />
                       </div>
                       
@@ -262,7 +262,7 @@ export function Hero() {
                            initial={{ width: "0%" }}
                            animate={{ width: "88%" }}
                            transition={{ duration: 4.8, ease: "easeOut", delay: 0.4 }}
-                           className="absolute top-0 left-0 h-full bg-gradient-to-r from-accent via-primary to-accent rounded-full bg-[length:200%_100%] shadow-[0_0_12px_rgba(56,189,248,0.5)]" 
+                           className="absolute top-0 left-0 h-full bg-linear-to-r from-accent via-primary to-accent rounded-full bg-size-[200%_100%] shadow-[0_0_12px_rgba(56,189,248,0.5)]" 
                          />
                       </div>
                     </div>
@@ -271,11 +271,11 @@ export function Hero() {
 
               {/* Right Item */}
               <SpotlightCard className="shadow-inner relative z-10 w-full">
-                 <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-3xl pointer-events-none" />
+                 <div className="absolute inset-0 bg-linear-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-3xl pointer-events-none" />
                  
                  <div className="relative flex items-center justify-between mb-8">
                    <div className="flex items-center gap-4">
-                     <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 text-blue-400 shadow-inner border border-blue-500/20 overflow-hidden">
+                     <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-blue-500/20 to-blue-500/5 text-blue-400 shadow-inner border border-blue-500/20 overflow-hidden">
                        <div className="absolute inset-0 bg-blue-500/20 hover:bg-blue-500/30 blur-xl transition-colors rounded-full" />
                        <Cpu className="h-6 w-6 relative z-10 group-hover:scale-110 transition-transform duration-500" />
                      </div>
@@ -293,7 +293,7 @@ export function Hero() {
                  
                  <div className="flex justify-between items-end mb-8 relative">
                     <div>
-                      <p className="text-4xl font-medium text-white tracking-tight group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-white group-hover:to-white/50 transition-all duration-300">$0.20<span className="text-base text-muted-foreground font-normal group-hover:text-white/40">/1M</span></p>
+                      <p className="text-4xl font-medium text-white tracking-tight group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-linear-to-r group-hover:from-white group-hover:to-white/50 transition-all duration-300">$0.20<span className="text-base text-muted-foreground font-normal group-hover:text-white/40">/1M</span></p>
                       <p className="text-[10px] text-muted-foreground mt-1.5 uppercase tracking-[0.15em] flex items-center gap-2">
                         Inference Fee
                       </p>
@@ -312,7 +312,7 @@ export function Hero() {
                            initial={{ width: "0%" }}
                            animate={{ width: "84%" }}
                            transition={{ duration: 4.5, ease: "easeOut" }}
-                           className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500/80 via-cyan-300 to-blue-500/80 rounded-full bg-[length:200%_100%] shadow-[0_0_15px_rgba(59,130,246,0.6)]" 
+                           className="absolute top-0 left-0 h-full bg-linear-to-r from-blue-500/80 via-cyan-300 to-blue-500/80 rounded-full bg-size-[200%_100%] shadow-[0_0_15px_rgba(59,130,246,0.6)]" 
                          />
                       </div>
                       
@@ -322,7 +322,7 @@ export function Hero() {
                            initial={{ width: "0%" }}
                            animate={{ width: "61%" }}
                            transition={{ duration: 5.5, ease: "easeInOut", delay: 0.1 }}
-                           className="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-400/80 via-blue-400 to-cyan-400/80 rounded-full bg-[length:200%_100%] shadow-[0_0_10px_rgba(34,211,238,0.5)]" 
+                           className="absolute top-0 left-0 h-full bg-linear-to-r from-cyan-400/80 via-blue-400 to-cyan-400/80 rounded-full bg-size-[200%_100%] shadow-[0_0_10px_rgba(34,211,238,0.5)]" 
                          />
                       </div>
                       
@@ -332,7 +332,7 @@ export function Hero() {
                            initial={{ width: "0%" }}
                            animate={{ width: "95%" }}
                            transition={{ duration: 5, ease: "easeOut", delay: 0.3 }}
-                           className="absolute top-0 left-0 h-full bg-gradient-to-r from-indigo-500/80 via-blue-400 to-indigo-500/80 rounded-full bg-[length:200%_100%] shadow-[0_0_12px_rgba(99,102,241,0.5)]" 
+                           className="absolute top-0 left-0 h-full bg-linear-to-r from-indigo-500/80 via-blue-400 to-indigo-500/80 rounded-full bg-size-[200%_100%] shadow-[0_0_12px_rgba(99,102,241,0.5)]" 
                          />
                       </div>
                     </div>

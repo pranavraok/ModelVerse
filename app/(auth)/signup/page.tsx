@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, Suspense } from "react"
+import { useMemo, useState, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -9,14 +9,28 @@ import { Label } from "@/components/ui/label"
 import { Cpu, Eye, EyeOff, ArrowRight } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Slider } from "@/components/ui/slider"
+import type { UserRole } from "@/lib/auth-api"
+
+const roleLabels: Record<UserRole, string> = {
+  creator: "Creator",
+  buyer: "Buyer",
+  "node-operator": "Node Operator",
+}
 
 function SignupForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const role = searchParams.get('role') || 'buyer' // Default back to buyer
+  const role = searchParams.get('role')
+  const selectedRole = useMemo<UserRole>(() => {
+    if (role === "creator" || role === "buyer" || role === "node-operator") {
+      return role
+    }
+    return "buyer"
+  }, [role])
   
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
   
   // Node Operator specifics
   const [showNodeModal, setShowNodeModal] = useState(false)
@@ -32,12 +46,13 @@ function SignupForm() {
   // Handles finishing the local signup process or showing the node setup modal.
   const handleAuthAction = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
+    setErrorMessage("")
     setIsLoading(true)
     
     // Simulate API call for form validation / social auth init
     await new Promise(resolve => setTimeout(resolve, 800))
     
-    if (role === 'node-operator') {
+    if (selectedRole === "node-operator") {
       setIsLoading(false)
       setShowNodeModal(true)
     } else {
@@ -53,12 +68,12 @@ function SignupForm() {
     setIsLoading(false)
 
     // Store user data temporarily (in real app, this would be server-side)
-    localStorage.setItem('pendingUser', JSON.stringify({ ...formData, role: role }))
+    localStorage.setItem('pendingUser', JSON.stringify({ ...formData, role: selectedRole }))
     
     // Redirect based on role
-    if (role === 'creator') {
+    if (selectedRole === "creator") {
       router.push('/creator')
-    } else if (role === 'buyer') {
+    } else if (selectedRole === "buyer") {
       router.push('/buyer')
     } else {
       router.push('/node-operator')
@@ -70,15 +85,15 @@ function SignupForm() {
       <div className="w-full max-w-md px-6 py-12 z-10">
         <div className="text-center mb-10">
           <Link href="/" className="inline-flex items-center justify-center gap-3 group">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/30 to-primary/5 border border-primary/20 shadow-[0_0_20px_rgba(139,92,246,0.2)] transition-transform group-hover:scale-105">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-primary/30 to-primary/5 border border-primary/20 shadow-[0_0_20px_rgba(139,92,246,0.2)] transition-transform group-hover:scale-105">
               <Cpu className="h-6 w-6 text-primary" />
             </div>
           </Link>
-          <h2 className="mt-8 text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
-            Create an account
+          <h2 className="mt-8 text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-linear-to-r from-foreground to-foreground/70">
+            Create {selectedRole ? roleLabels[selectedRole] : ""} account
           </h2>
           <p className="mt-3 text-sm text-muted-foreground">
-            Join the decentralized AI economy as a <span className="font-semibold text-primary capitalize">{role.replace('-', ' ')}</span>
+            Join the decentralized AI economy as a <span className="font-semibold text-primary capitalize">{selectedRole.replace('-', ' ')}</span>
           </p>
         </div>
 
@@ -136,9 +151,15 @@ function SignupForm() {
               </p>
             </div>
 
+            {errorMessage && (
+              <p className="rounded-lg border border-red-400/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {errorMessage}
+              </p>
+            )}
+
             <Button 
               type="submit" 
-              className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all hover:shadow-[0_0_25px_rgba(139,92,246,0.5)] font-medium text-lg mt-4"
+              className="w-full h-12 rounded-xl bg-linear-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all hover:shadow-[0_0_25px_rgba(139,92,246,0.5)] font-medium text-lg mt-4"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -162,7 +183,7 @@ function SignupForm() {
               </div>
             </div>
 
-            <div className={`mt-6 grid gap-4 ${role === 'buyer' ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            <div className={`mt-6 grid gap-4 ${selectedRole === "buyer" ? "grid-cols-1" : "grid-cols-2"}`}>
               <Button 
                 variant="outline" 
                 onClick={() => handleAuthAction()}
@@ -176,7 +197,7 @@ function SignupForm() {
                 </svg>
                 Google
               </Button>
-              {role !== 'buyer' && (
+              {selectedRole !== "buyer" && (
                 <Button 
                   variant="outline" 
                   onClick={() => handleAuthAction()}
@@ -213,7 +234,7 @@ function SignupForm() {
 
       {/* Node Operator Setup Modal */}
       <Dialog open={showNodeModal} onOpenChange={setShowNodeModal}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-106.25">
           <DialogHeader>
             <DialogTitle>Configure Your Node</DialogTitle>
             <DialogDescription>
@@ -281,9 +302,9 @@ export default function SignupPage() {
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-background">
       {/* Background effects */}
       <div className="absolute inset-0 z-0">
-        <div className="absolute top-1/4 right-1/4 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 blur-[120px]" />
-        <div className="absolute bottom-1/4 left-1/4 h-[600px] w-[600px] translate-x-1/4 translate-y-1/4 rounded-full bg-accent/20 blur-[150px]" />
-        <div className="absolute top-1/2 left-1/2 h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-chart-4/10 blur-[100px]" />
+        <div className="absolute top-1/4 right-1/4 h-125 w-125 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 blur-[120px]" />
+        <div className="absolute bottom-1/4 left-1/4 h-150 w-150 translate-x-1/4 translate-y-1/4 rounded-full bg-accent/20 blur-[150px]" />
+        <div className="absolute top-1/2 left-1/2 h-100 w-100 -translate-x-1/2 -translate-y-1/2 rounded-full bg-chart-4/10 blur-[100px]" />
       </div>
 
       {/* Grid pattern */}

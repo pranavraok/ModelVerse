@@ -2,7 +2,7 @@
 
 import { DashboardHeader } from "@/components/dashboard/header"
 import { Card } from "@/components/ui/card"
-import { RegisterModelForm } from "@/components/RegisterModelForm"
+import { RegisterModelForm } from "../../components/RegisterModelForm"
 import { 
   Package, 
   Play, 
@@ -131,7 +131,7 @@ export default function CreatorDashboard() {
                     {stat.change}
                   </div>
                 </div>
-                <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br ${stat.color}`}>
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-linear-to-br ${stat.color}`}>
                   <stat.icon className="h-5 w-5" />
                 </div>
               </div>

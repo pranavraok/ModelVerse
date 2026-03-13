@@ -8,3 +8,10 @@ node_modules/
 .next/
 .env*.local
 .DS_Store
+
+# Python/backend ignores
+backend/.venv/
+backend/__pycache__/
+backend/**/*.pyc
+backend/.env
+backend/.env.example
