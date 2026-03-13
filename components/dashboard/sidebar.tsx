@@ -37,7 +37,7 @@ const creatorLinks = [
 
 const buyerLinks = [
   { name: "Dashboard", href: "/buyer", icon: LayoutDashboard },
-  { name: "Marketplace", href: "/buyer/marketplace", icon: Store },
+  { name: "Marketplace", href: "/marketplace", icon: Store },
   { name: "My Jobs", href: "/buyer/jobs", icon: Play },
   { name: "History", href: "/buyer/history", icon: History },
   { name: "Settings", href: "/buyer/settings", icon: Settings },
@@ -84,8 +84,8 @@ export function DashboardSidebar({ role }: SidebarProps) {
           <p className="px-3 mb-5 text-[12px] font-bold text-neutral-500 uppercase tracking-[0.2em]">Neural Interface</p>
           {links.map((link) => {
             const isActive = pathname === link.href || 
-              (link.href !== `/${role}` && link.href !== '/buyer/marketplace' && pathname.startsWith(link.href)) || 
-              (link.href === '/buyer/marketplace' && pathname.startsWith('/buyer/marketplace'))
+              (link.href !== `/${role}` && link.href !== '/marketplace' && pathname.startsWith(link.href)) || 
+              (link.href === '/marketplace' && pathname.startsWith('/marketplace'))
             
             return (
               <Link
