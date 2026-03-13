@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Cpu, Eye, EyeOff, ArrowRight } from "lucide-react"
 import {
+  getOAuthStartUrl,
+  getAuthMe,
   loginWithPassword,
   roleToDashboardPath,
   selectUserRole,
@@ -25,6 +27,7 @@ export default function LoginPage() {
   const searchParams = useSearchParams()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isOAuthProcessing, setIsOAuthProcessing] = useState(false)
   const [selectedRole, setSelectedRole] = useState<UserRole>("creator")
   const [errorMessage, setErrorMessage] = useState("")
   const [formData, setFormData] = useState({
@@ -51,6 +54,79 @@ export default function LoginPage() {
       setSelectedRole(pendingRole)
     }
   }, [roleFromQuery])
+
+  useEffect(() => {
+    let isCancelled = false
+
+    const handleOAuthReturn = async () => {
+      if (typeof window === "undefined") return
+      const hash = window.location.hash
+      if (!hash.startsWith("#")) return
+
+      setIsOAuthProcessing(true)
+      setErrorMessage("")
+
+      const params = new URLSearchParams(hash.slice(1))
+      const accessToken = params.get("access_token")
+      if (!accessToken) {
+        if (!isCancelled) setIsOAuthProcessing(false)
+        return
+      }
+
+      const pendingRole = localStorage.getItem("pendingRole")
+      const roleFromStorage: UserRole | null =
+        pendingRole === "creator" || pendingRole === "buyer" || pendingRole === "node-operator"
+          ? pendingRole
+          : null
+      const roleToPersist = roleFromQuery ?? roleFromStorage ?? selectedRole
+
+      try {
+        localStorage.setItem("accessToken", accessToken)
+
+        let effectiveRole: UserRole = roleToPersist
+
+        const me = await getAuthMe(accessToken)
+        const apiRole = me.user?.role
+        if (apiRole === "creator" || apiRole === "buyer" || apiRole === "node-operator") {
+          effectiveRole = apiRole
+        } else {
+          await selectUserRole({ role: roleToPersist, accessToken })
+          effectiveRole = roleToPersist
+        }
+
+        localStorage.setItem("userRole", effectiveRole)
+        localStorage.removeItem("pendingRole")
+        if (!isCancelled) setSelectedRole(effectiveRole)
+      } catch (error) {
+        if (!isCancelled) {
+          setErrorMessage(error instanceof Error ? error.message : "OAuth login failed")
+        }
+        if (!isCancelled) setIsOAuthProcessing(false)
+        return
+      }
+
+      if (!isCancelled) {
+        const userRole = localStorage.getItem("userRole")
+        const finalRole: UserRole =
+          userRole === "creator" || userRole === "buyer" || userRole === "node-operator"
+            ? userRole
+            : roleToPersist
+
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.search)
+        router.replace(roleToDashboardPath(finalRole))
+      }
+
+      if (!isCancelled) {
+        setIsOAuthProcessing(false)
+      }
+    }
+
+    handleOAuthReturn()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [roleFromQuery, router, selectedRole])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,19 +165,19 @@ export default function LoginPage() {
     }
   }
 
-  const handleSocialLogin = (provider: "google" | "github") => {
+  const handleSocialLogin = async (provider: "google" | "github") => {
     localStorage.setItem("pendingRole", selectedRole)
 
-    const redirectTo = `${window.location.origin}/login?role=${selectedRole}&provider=${provider}`
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-
-    if (supabaseUrl) {
-      const oauthUrl = `${supabaseUrl}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(redirectTo)}`
-      window.location.assign(oauthUrl)
-      return
+    try {
+      const { oauth_url } = await getOAuthStartUrl({
+        provider,
+        role: selectedRole,
+        mode: "login",
+      })
+      window.location.assign(oauth_url)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to start social login")
     }
-
-    window.location.assign(`/login?role=${selectedRole}&provider=${provider}`)
   }
 
   return (
@@ -204,7 +280,7 @@ export default function LoginPage() {
             <Button 
               type="submit" 
               className="w-full h-12 rounded-xl bg-linear-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all hover:shadow-[0_0_25px_rgba(139,92,246,0.5)] font-medium text-lg mt-4"
-              disabled={isLoading}
+              disabled={isLoading || isOAuthProcessing}
             >
               {isLoading ? (
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
@@ -232,6 +308,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={() => handleSocialLogin("google")}
                 variant="outline"
+                disabled={isOAuthProcessing}
                 className="h-12 rounded-xl border-border/50 bg-background/30 hover:bg-background/50 hover:border-border/80 transition-all"
               >
                 <svg className="mr-2 h-4 w-4 text-foreground/80" viewBox="0 0 24 24">
@@ -258,6 +335,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={() => handleSocialLogin("github")}
                 variant="outline"
+                disabled={isOAuthProcessing}
                 className="h-12 rounded-xl border-border/50 bg-background/30 hover:bg-background/50 hover:border-border/80 transition-all"
               >
                 <svg className="mr-2 h-4 w-4 text-foreground/80" fill="currentColor" viewBox="0 0 24 24">
@@ -266,6 +344,10 @@ export default function LoginPage() {
                 GitHub
               </Button>
             </div>
+
+            {isOAuthProcessing && (
+              <p className="mt-4 text-center text-sm text-muted-foreground">Completing social login and redirecting...</p>
+            )}
           </div>
         </div>
         
