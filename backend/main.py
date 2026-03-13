@@ -4,6 +4,7 @@ import json
 import asyncio
 import logging
 import base64
+import mimetypes
 import subprocess
 import shutil
 from datetime import datetime, timezone
@@ -11,9 +12,10 @@ from pathlib import Path
 from typing import Any, Dict, Literal
 from contextlib import suppress
 
-from fastapi import Depends, FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import Depends, FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+import httpx
 from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
@@ -73,6 +75,10 @@ MODEL_REGISTRY_ADDRESS = os.getenv(
 JOB_MANAGER_ADDRESS = os.getenv(
     "JOB_MANAGER_ADDRESS", "0xB6271a63c01d651CEbF6F22FE411aB4cf1465195"
 )
+PINATA_JWT = os.getenv("PINATA_JWT", "").strip()
+PINATA_PIN_FILE_URL = os.getenv(
+    "PINATA_PIN_FILE_URL", "https://api.pinata.cloud/pinning/pinFileToIPFS"
+).strip()
 _web3_listener_task: asyncio.Task | None = None
 active_nodes: Dict[str, WebSocket] = {}
 
@@ -80,6 +86,48 @@ active_nodes: Dict[str, WebSocket] = {}
 _DUMMY_INPUT_BASE64 = (
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 )
+
+_UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
+_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+async def _pin_file_to_pinata(file_bytes: bytes, filename: str, creator_wallet: str) -> str:
+    if not PINATA_JWT:
+        raise HTTPException(status_code=500, detail="PINATA_JWT is not configured on backend")
+
+    mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    metadata = {
+        "name": filename,
+        "keyvalues": {
+            "creator_wallet": creator_wallet,
+            "app": "modelverse",
+        },
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                PINATA_PIN_FILE_URL,
+                headers={"Authorization": f"Bearer {PINATA_JWT}"},
+                data={"pinataMetadata": json.dumps(metadata)},
+                files={"file": (filename, file_bytes, mime)},
+            )
+
+        body = response.json() if response.content else {}
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Pinata upload failed: {body or response.text}",
+            )
+
+        cid = str(body.get("IpfsHash") or "").strip()
+        if not cid:
+            raise HTTPException(status_code=502, detail="Pinata response missing IpfsHash")
+        return cid
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Pinata upload error: {exc}") from exc
 
 
 # ─────────────────────────── Pydantic models ────────────────────────────────
@@ -492,24 +540,224 @@ def list_models(current_user: dict[str, Any] = Depends(get_current_user)):
 @app.get("/api/models")
 def list_models_api(
     category: str | None = Query(default=None),
+    mine: bool = Query(default=False),
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
-    query = supabase.table("models").select("*")
-    if category:
-        query = query.eq("category", category)
+    wallet = str(current_user["wallet"]).lower()
+    response_data: list[dict[str, Any]] = []
 
-    response = query.range(offset, offset + limit - 1).execute()
+    if mine:
+        # Some deployments use different owner column names.
+        owner_columns = ["creator_wallet", "creator_address", "owner_wallet", "wallet_address", "wallet", "creator"]
+        last_error = None
+        for owner_col in owner_columns:
+            try:
+                query = supabase.table("models").select("*").eq(owner_col, wallet)
+                if category:
+                    query = query.eq("category", category)
+                response = query.range(offset, offset + limit - 1).execute()
+                response_data = response.data or []
+                last_error = None
+                break
+            except Exception as exc:
+                last_error = exc
+                continue
+
+        if last_error is not None and not response_data:
+            raise HTTPException(status_code=500, detail=f"Failed to fetch creator models: {last_error}")
+    else:
+        query = supabase.table("models").select("*")
+        if category:
+            query = query.eq("category", category)
+        response = query.range(offset, offset + limit - 1).execute()
+        response_data = response.data or []
+
     return {
-        "wallet": current_user["wallet"],
-        "items": response.data or [],
+        "wallet": wallet,
+        "items": response_data,
         "pagination": {
             "category": category,
+            "mine": mine,
             "limit": limit,
             "offset": offset,
-            "count": len(response.data or []),
+            "count": len(response_data),
         },
+    }
+
+
+@app.get("/api/models/{model_id}")
+def get_model_api(
+    model_id: str,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    wallet = str(current_user["wallet"]).lower()
+    try:
+        response = (
+            supabase.table("models")
+            .select("*")
+            .eq("id", model_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch model: {exc}") from exc
+
+    rows = response.data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    return {
+        "wallet": wallet,
+        "item": rows[0],
+    }
+
+
+def _column_exists(table: str, column: str) -> bool:
+    try:
+        supabase.table(table).select(column).limit(1).execute()
+        return True
+    except Exception:
+        return False
+
+
+def _existing_columns(table: str, candidates: list[str]) -> set[str]:
+    return {col for col in candidates if _column_exists(table, col)}
+
+
+@app.post("/api/models/upload")
+async def upload_model_api(
+    name: str = Form(...),
+    description: str = Form(""),
+    category: str = Form("other"),
+    sample_input: str = Form(""),
+    expected_output: str = Form(""),
+    price: str = Form("0"),
+    model_file: UploadFile = File(...),
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    wallet = str(current_user["wallet"]).lower()
+
+    filename = (model_file.filename or "model.bin").lower()
+    if not (filename.endswith(".onnx") or filename.endswith(".tflite")):
+        raise HTTPException(status_code=400, detail="Only .onnx or .tflite files are supported")
+
+    try:
+        price_value = float(price)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid price") from exc
+
+    model_id = str(uuid.uuid4())
+    ext = Path(filename).suffix or ".bin"
+    stored_name = f"{model_id}{ext}"
+    local_path = _UPLOADS_DIR / stored_name
+
+    file_bytes = await model_file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+    local_path.write_bytes(file_bytes)
+
+    ipfs_cid = await _pin_file_to_pinata(file_bytes, stored_name, wallet)
+
+    payload_base = {
+        "id": model_id,
+        "name": name.strip(),
+        "description": description.strip(),
+        "category": (category or "other").strip(),
+        "sample_input": sample_input,
+        "expected_output": expected_output,
+        "price": price_value,
+        "ipfs_cid": ipfs_cid,
+        "creator_wallet": wallet,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    candidate_columns = [
+        "id",
+        "name",
+        "description",
+        "category",
+        "price",
+        "price_per_inference",
+        "sample_input",
+        "expected_output",
+        "ipfs_cid",
+        "model_cid",
+        "status",
+        "created_at",
+        "updated_at",
+        "file_name",
+        "file_path",
+        "creator_wallet",
+        "creator_address",
+        "owner_wallet",
+        "wallet_address",
+        "wallet",
+        "creator",
+    ]
+    existing = _existing_columns("models", candidate_columns)
+
+    candidate_values: dict[str, Any] = {
+        "id": payload_base["id"],
+        "name": payload_base["name"],
+        "description": payload_base["description"],
+        "category": payload_base["category"],
+        "price": payload_base["price"],
+        "price_per_inference": payload_base["price"],
+        "sample_input": payload_base["sample_input"],
+        "expected_output": payload_base["expected_output"],
+        "ipfs_cid": payload_base["ipfs_cid"],
+        "model_cid": payload_base["ipfs_cid"],
+        "status": "active",
+        "created_at": payload_base["created_at"],
+        "updated_at": payload_base["created_at"],
+        "file_name": stored_name,
+        "file_path": str(local_path),
+    }
+
+    payload: dict[str, Any] = {
+        key: value for key, value in candidate_values.items() if key in existing
+    }
+
+    for owner_col in ("creator_wallet", "creator_address", "owner_wallet", "wallet_address", "wallet", "creator"):
+        if owner_col in existing:
+            payload[owner_col] = wallet
+
+    insert_error = None
+    inserted_row: dict[str, Any] | None = None
+    try:
+        response = supabase.table("models").insert(payload).execute()
+        if response.data:
+            inserted_row = response.data[0]
+    except Exception as exc:
+        insert_error = exc
+
+    if not inserted_row:
+        # Fallback with strict minimal payload if extra columns/triggers reject larger inserts.
+        fallback_payload = {
+            key: value
+            for key, value in payload.items()
+            if key in {"id", "name", "description", "category", "price", "status", "creator_wallet", "creator_address", "owner_wallet", "wallet_address", "wallet", "creator"}
+        }
+        try:
+            response = supabase.table("models").insert(fallback_payload).execute()
+            if response.data:
+                inserted_row = response.data[0]
+                insert_error = None
+        except Exception as exc:
+            insert_error = exc
+
+    if not inserted_row:
+        raise HTTPException(status_code=500, detail=f"Failed to insert model row: {insert_error}")
+
+    return {
+        "message": "Model uploaded",
+        "model_id": str(inserted_row.get("id") or model_id),
+        "ipfs_cid": str(inserted_row.get("ipfs_cid") or inserted_row.get("model_cid") or ipfs_cid),
+        "creator_wallet": wallet,
+        "file_name": stored_name,
     }
 
 

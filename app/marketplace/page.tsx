@@ -1,11 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card } from "@/components/ui/card"
-import { Slider } from "@/components/ui/slider"
+import { Button } from "@/components/ui/button"
 import {
   Select,
   SelectContent,
@@ -13,18 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Header } from "@/components/landing/header"
 import { DashboardSidebar } from "@/components/dashboard/sidebar"
-import { 
-  Search, 
-  Filter,
-  Star,
-  Play,
-  Package,
-  ArrowUpDown,
-  X
-} from "lucide-react"
-import { useEffect } from "react"
+import { Header } from "@/components/landing/header"
+import { Search, Star, Play, Package } from "lucide-react"
+import { useAccount } from "wagmi"
+import { fetchModels, shortWallet, type MarketplaceModel } from "@/lib/model-api"
 
 const categories = [
 // ... (rest of categories)
@@ -44,104 +35,15 @@ const sortOptions = [
   { value: "rating", label: "Highest Rated" }
 ]
 
-const models = [
-  {
-    id: 1,
-    name: "GPT-Vision-Pro",
-    description: "Advanced image recognition and analysis model with high accuracy for object detection.",
-    category: "Image Recognition",
-    creator: "0x8912...3456",
-    price: 0.05,
-    rating: 4.9,
-    jobs: 1247,
-    featured: true
-  },
-  {
-    id: 2,
-    name: "NLP-Sentiment-v3",
-    description: "State-of-the-art sentiment analysis for text data with multi-language support.",
-    category: "Natural Language Processing",
-    creator: "0x2345...6789",
-    price: 0.03,
-    rating: 4.7,
-    jobs: 892,
-    featured: false
-  },
-  {
-    id: 3,
-    name: "Credit-Score-AI",
-    description: "ML-based credit scoring model trained on diverse financial datasets.",
-    category: "Credit Scoring",
-    creator: "0x5678...9012",
-    price: 0.12,
-    rating: 4.8,
-    jobs: 567,
-    featured: true
-  },
-  {
-    id: 4,
-    name: "Voice-Transcriber",
-    description: "High-accuracy speech-to-text with support for 50+ languages.",
-    category: "Voice Analysis",
-    creator: "0x9012...3456",
-    price: 0.08,
-    rating: 4.6,
-    jobs: 432,
-    featured: false
-  },
-  {
-    id: 5,
-    name: "Image-Classifier-Pro",
-    description: "Multi-class image classification with custom category support.",
-    category: "Image Recognition",
-    creator: "0x3456...7890",
-    price: 0.06,
-    rating: 4.5,
-    jobs: 389,
-    featured: false
-  },
-  {
-    id: 6,
-    name: "Text-Summarizer",
-    description: "Intelligent text summarization with adjustable compression ratios.",
-    category: "Natural Language Processing",
-    creator: "0x7890...1234",
-    price: 0.04,
-    rating: 4.4,
-    jobs: 278,
-    featured: false
-  },
-  {
-    id: 7,
-    name: "Fraud-Detector",
-    description: "Real-time fraud detection for financial transactions.",
-    category: "Credit Scoring",
-    creator: "0x4567...8901",
-    price: 0.15,
-    rating: 4.9,
-    jobs: 654,
-    featured: true
-  },
-  {
-    id: 8,
-    name: "Emotion-Analyzer",
-    description: "Detect emotions from voice recordings with high precision.",
-    category: "Voice Analysis",
-    creator: "0x6789...0123",
-    price: 0.07,
-    rating: 4.3,
-    jobs: 198,
-    featured: false
-  }
-]
-
 export default function MarketplacePage() {
+  const { address } = useAccount()
   const [searchQuery, setSearchQuery] = useState("")
   const [category, setCategory] = useState("all")
   const [sortBy, setSortBy] = useState("popular")
-  const [priceRange, setPriceRange] = useState([0, 0.2])
-  const [showFilters, setShowFilters] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [models, setModels] = useState<MarketplaceModel[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
     // Priority: queryParam > localStorage
@@ -156,13 +58,63 @@ export default function MarketplacePage() {
     }
   }, [])
 
-  const filteredModels = models.filter(model => {
-    const matchesSearch = model.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         model.description.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = category === "all" || model.category.toLowerCase().includes(category.replace("-", " "))
-    const matchesPrice = model.price >= priceRange[0] && model.price <= priceRange[1]
-    return matchesSearch && matchesCategory && matchesPrice
-  })
+  useEffect(() => {
+    let ignore = false
+
+    const loadModels = async () => {
+      try {
+        setIsLoading(true)
+        setLoadError("")
+        const items = await fetchModels({ wallet: address, category, limit: 200 })
+        if (!ignore) {
+          setModels(items)
+        }
+      } catch (error) {
+        if (!ignore) {
+          setLoadError(error instanceof Error ? error.message : "Failed to load marketplace models")
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void loadModels()
+    return () => {
+      ignore = true
+    }
+  }, [address, category])
+
+  const filteredModels = useMemo(() => {
+    const normalizedQuery = searchQuery.toLowerCase().trim()
+    const searched = models.filter((model) => {
+      if (!normalizedQuery) return true
+      return (
+        model.name.toLowerCase().includes(normalizedQuery) ||
+        model.description.toLowerCase().includes(normalizedQuery)
+      )
+    })
+
+    const sorted = [...searched]
+    if (sortBy === "price-low") sorted.sort((a, b) => a.price - b.price)
+    if (sortBy === "price-high") sorted.sort((a, b) => b.price - a.price)
+    if (sortBy === "rating") sorted.sort((a, b) => b.rating - a.rating)
+    if (sortBy === "newest") {
+      sorted.sort((a, b) => {
+        const aTs = a.createdAt ? new Date(a.createdAt).getTime() : 0
+        const bTs = b.createdAt ? new Date(b.createdAt).getTime() : 0
+        return bTs - aTs
+      })
+    }
+    if (sortBy === "popular" || sortBy === "trending") sorted.sort((a, b) => b.jobs - a.jobs)
+    return sorted
+  }, [models, searchQuery, sortBy])
+
+  const featuredModels = useMemo(
+    () => [...filteredModels].sort((a, b) => b.jobs - a.jobs).slice(0, 4),
+    [filteredModels]
+  )
 
   const content = (
     <main className={userRole ? "py-10" : "pt-28 pb-20"}>
@@ -210,7 +162,7 @@ export default function MarketplacePage() {
 
         {/* Featured Models Row */}
         <div className="mb-12 flex gap-6 overflow-x-auto pb-6 snap-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          {models.filter(m => m.featured).map(model => (
+          {featuredModels.map(model => (
             <div key={model.id} className="group relative min-w-[340px] flex-1 cursor-pointer glass-card p-6 transition-all duration-500 hover:translate-y-[-4px] snap-start border-white/[0.05]">
               <div className="flex items-center gap-4 mb-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 group-hover:bg-primary/20 transition-all duration-500">
@@ -218,7 +170,7 @@ export default function MarketplacePage() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-lg tracking-tight text-white/95">{model.name}</h3>
-                  <span className="text-[10px] font-semibold text-primary/60 text-neutral-500">{model.category}</span>
+                  <span className="text-[10px] font-semibold text-primary/60">{model.category}</span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground/70 leading-relaxed font-medium line-clamp-2">{model.description}</p>
@@ -250,7 +202,7 @@ export default function MarketplacePage() {
           </div>
 
           <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="w-[200px] h-11 bg-white/[0.02] border-white/[0.03] rounded-xl font-semibold text-[11px] text-neutral-500 text-muted-foreground focus:ring-primary/20">
+            <SelectTrigger className="w-[200px] h-11 bg-white/[0.02] border-white/[0.03] rounded-xl font-semibold text-[11px] text-muted-foreground focus:ring-primary/20">
               <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent className="glass-card border-white/[0.05]">
@@ -301,18 +253,18 @@ export default function MarketplacePage() {
                       </div>
                     </td>
                     <td className="px-8 py-6 font-semibold text-muted-foreground/80">{model.jobs.toLocaleString()}</td>
-                    <td className="px-8 py-6 text-muted-foreground/40 font-mono text-xs capitalize tracking-tight">{model.creator}</td>
+                    <td className="px-8 py-6 text-muted-foreground/40 font-mono text-xs capitalize tracking-tight">{shortWallet(model.creatorWallet)}</td>
                     <td className="px-8 py-6 text-right">
                       <div className="relative flex items-center justify-end h-8 overflow-hidden sm:overflow-visible">
                         {/* Static Age - hidden on row hover */}
-                        <span className="text-[11px] font-semibold text-neutral-500 text-muted-foreground/20 group-hover:-translate-x-full group-hover:opacity-0 transition-all duration-500 absolute right-0">
-                          {model.id % 2 === 0 ? '6M' : '1Y'}
+                        <span className="text-[11px] font-semibold text-muted-foreground/20 group-hover:-translate-x-full group-hover:opacity-0 transition-all duration-500 absolute right-0">
+                          {idx % 2 === 0 ? '6M' : '1Y'}
                         </span>
                         
                         {/* Actions - visible on row hover */}
                         <div className="flex items-center justify-end gap-3 translate-x-12 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-500 absolute right-0">
                           <Link href={`/marketplace/${model.id}`}>
-                            <Button variant="ghost" size="sm" className="h-9 hover:bg-white/5 rounded-xl text-xs font-semibold text-neutral-500 text-muted-foreground hover:text-white px-4">Details</Button>
+                            <Button variant="ghost" size="sm" className="h-9 hover:bg-white/5 rounded-xl text-xs font-semibold text-muted-foreground hover:text-white px-4">Details</Button>
                           </Link>
                           <Link href={`/marketplace/${model.id}/run`}>
                             <Button size="sm" className="h-9 bg-primary/10 text-primary hover:bg-primary hover:text-white font-semibold text-[11px] capitalize tracking-[0.15em] px-6 rounded-xl shadow-[0_0_15px_rgba(139,92,246,0.1)] transition-all">
@@ -329,7 +281,20 @@ export default function MarketplacePage() {
           </div>
         </div>
 
-        {filteredModels.length === 0 && (
+        {isLoading && (
+          <div className="py-24 text-center">
+            <p className="text-sm font-medium text-muted-foreground/60">Loading marketplace models...</p>
+          </div>
+        )}
+
+        {loadError && !isLoading && (
+          <div className="py-24 text-center">
+            <h3 className="text-xl font-semibold tracking-tight text-white/90 mb-3">Could not load models</h3>
+            <p className="text-sm text-muted-foreground/60 font-medium">{loadError}</p>
+          </div>
+        )}
+
+        {!isLoading && !loadError && filteredModels.length === 0 && (
           <div className="py-32 text-center">
             <h3 className="text-xl font-semibold tracking-tight text-white/90 mb-3">No neural models found</h3>
             <p className="text-sm text-muted-foreground/50 font-medium">Refine your search parameters or select a different category.</p>
