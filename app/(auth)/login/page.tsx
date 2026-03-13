@@ -108,9 +108,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-background">
       {/* Background effects */}
       <div className="absolute inset-0 z-0">
-        <div className="absolute top-1/4 left-1/4 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 blur-[120px]" />
-        <div className="absolute bottom-1/4 right-1/4 h-[600px] w-[600px] translate-x-1/4 translate-y-1/4 rounded-full bg-accent/20 blur-[150px]" />
-        <div className="absolute top-1/2 left-1/2 h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-chart-4/10 blur-[100px]" />
+        <div className="absolute top-1/4 left-1/4 h-125 w-125 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/20 blur-[120px]" />
+        <div className="absolute bottom-1/4 right-1/4 h-150 w-150 translate-x-1/4 translate-y-1/4 rounded-full bg-accent/20 blur-[150px]" />
+        <div className="absolute top-1/2 left-1/2 h-100 w-100 -translate-x-1/2 -translate-y-1/2 rounded-full bg-chart-4/10 blur-[100px]" />
       </div>
 
       {/* Grid pattern */}
@@ -125,11 +125,11 @@ export default function LoginPage() {
       <div className="w-full max-w-md px-6 py-12 z-10">
         <div className="text-center mb-10">
           <Link href="/" className="inline-flex items-center justify-center gap-3 group">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/30 to-primary/5 border border-primary/20 shadow-[0_0_20px_rgba(139,92,246,0.2)] transition-transform group-hover:scale-105">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-primary/30 to-primary/5 border border-primary/20 shadow-[0_0_20px_rgba(139,92,246,0.2)] transition-transform group-hover:scale-105">
               <Cpu className="h-6 w-6 text-primary" />
             </div>
           </Link>
-          <h2 className="mt-8 text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
+          <h2 className="mt-8 text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-linear-to-r from-foreground to-foreground/70">
             Welcome back
           </h2>
           <p className="mt-3 text-sm text-muted-foreground">
@@ -203,7 +203,7 @@ export default function LoginPage() {
 
             <Button 
               type="submit" 
-              className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all hover:shadow-[0_0_25px_rgba(139,92,246,0.5)] font-medium text-lg mt-4"
+              className="w-full h-12 rounded-xl bg-linear-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all hover:shadow-[0_0_25px_rgba(139,92,246,0.5)] font-medium text-lg mt-4"
               disabled={isLoading}
             >
               {isLoading ? (

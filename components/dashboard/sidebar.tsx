@@ -14,7 +14,10 @@ import {
   LogOut,
   Store,
   History,
-  Play
+  Play,
+  PlusCircle,
+  Terminal,
+  Activity
 } from "lucide-react"
 
 import { useRouter } from "next/navigation"
@@ -43,7 +46,9 @@ const buyerLinks = [
 
 const nodeOperatorLinks = [
   { name: "Dashboard", href: "/node-operator", icon: LayoutDashboard },
-  { name: "Marketplace", href: "/marketplace", icon: Store },
+  { name: "Register Node", href: "/node-operator/register", icon: PlusCircle },
+  { name: "Setup", href: "/node-operator/setup", icon: Terminal },
+  { name: "Active Jobs", href: "/node-operator/jobs", icon: Activity },
   { name: "My Nodes", href: "/node-operator/nodes", icon: Cpu },
   { name: "Earnings", href: "/node-operator/earnings", icon: Wallet },
   { name: "Settings", href: "/node-operator/settings", icon: Settings },
@@ -58,8 +63,8 @@ export function DashboardSidebar({ role }: SidebarProps) {
 
   const handleLogout = () => {
     localStorage.removeItem('userRole')
-    localStorage.removeItem('pendingRole')
-    localStorage.removeItem('accessToken')
+    localStorage.removeItem('pendingUser')
+    localStorage.setItem('walletDisconnected', 'true') // disconnect wallet on sign out
     router.push('/')
   }
 

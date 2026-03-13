@@ -72,7 +72,7 @@ export default function NodeOperatorDashboard() {
                     {stat.trend === 'up' && <ArrowUpRight className="ml-0.5 h-3 w-3" />}
                   </div>
                 </div>
-                <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br ${stat.color}`}>
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-linear-to-br ${stat.color}`}>
                   <stat.icon className="h-5 w-5 text-foreground" />
                 </div>
               </div>

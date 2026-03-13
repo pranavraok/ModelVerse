@@ -1,15 +1,10 @@
 "use client"
 
-import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { 
   Bell, 
-  Search, 
-  Wallet,
-  ChevronDown,
-  Check,
-  X
+  Search
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -17,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 interface DashboardHeaderProps {
   title: string
@@ -30,10 +26,6 @@ const notifications = [
 ]
 
 export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
-  const [isWalletConnected, setIsWalletConnected] = useState(false)
-  const [walletAddress] = useState("0x1234...5678")
-  const [balance] = useState("12.5 MATIC")
-
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/40 bg-background/80 px-6 backdrop-blur-xl">
       <div>
@@ -78,42 +70,7 @@ export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
         </DropdownMenu>
 
         {/* Wallet */}
-        {isWalletConnected ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="border-border/60 gap-2">
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-accent/20">
-                  <Wallet className="h-3 w-3 text-accent" />
-                </div>
-                <span className="hidden sm:inline">{walletAddress}</span>
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <div className="px-4 py-3 border-b border-border/40">
-                <p className="text-xs text-muted-foreground">Balance</p>
-                <p className="text-lg font-semibold">{balance}</p>
-              </div>
-              <DropdownMenuItem className="cursor-pointer">
-                <Check className="mr-2 h-4 w-4" />
-                Copy address
-              </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer text-destructive" onClick={() => setIsWalletConnected(false)}>
-                <X className="mr-2 h-4 w-4" />
-                Disconnect
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <Button 
-            variant="outline" 
-            className="border-primary/40 text-primary hover:bg-primary/10"
-            onClick={() => setIsWalletConnected(true)}
-          >
-            <Wallet className="mr-2 h-4 w-4" />
-            Connect Wallet
-          </Button>
-        )}
+        <ConnectButton />
       </div>
     </header>
   )

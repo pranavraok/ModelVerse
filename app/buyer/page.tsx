@@ -18,7 +18,7 @@ import {
 
 const stats = [
   {
-    title: "Total Jobs",
+    title: "Total Jobs Submitted",
     value: "156",
     change: "+8",
     trend: "up",
@@ -42,7 +42,7 @@ const stats = [
     color: "from-accent/20 to-accent/5"
   },
   {
-    title: "Avg Cost/Job",
+    title: "Average Job Cost",
     value: "0.08 MATIC",
     change: "-5%",
     trend: "down",
@@ -52,6 +52,13 @@ const stats = [
 ]
 
 const activeJobs = [
+  {
+    id: "JOB-1848",
+    model: "Stable-Diffusion-XL",
+    status: "assigned",
+    progress: 10,
+    startedAt: "Just now"
+  },
   {
     id: "JOB-1847",
     model: "GPT-Vision-Pro",
@@ -69,46 +76,53 @@ const activeJobs = [
   {
     id: "JOB-1845",
     model: "Image-Classifier",
-    status: "running",
-    progress: 90,
+    status: "completed",
+    progress: 100,
     startedAt: "8 min ago"
+  },
+  {
+    id: "JOB-1844",
+    model: "Voice-Analysis",
+    status: "failed",
+    progress: 45,
+    startedAt: "10 min ago"
   }
 ]
 
-const recentJobs = [
+const recommendedModels = [
   {
-    id: "JOB-1844",
-    model: "Credit-Score-AI",
-    status: "completed",
-    cost: "0.12 MATIC",
-    completedAt: "15 min ago"
+    id: "MOD-1",
+    name: "Llama-3-70b-Instruct",
+    category: "Large Language Model",
+    description: "Highly capable open-weight model for complex reasoning.",
+    runs: 1245,
   },
   {
-    id: "JOB-1843",
-    model: "Voice-Analysis",
-    status: "completed",
-    cost: "0.06 MATIC",
-    completedAt: "1 hour ago"
+    id: "MOD-2",
+    name: "Stable-Video-Diffusion",
+    category: "Video Generation",
+    description: "State-of-the-art video generation from images.",
+    runs: 856,
   },
   {
-    id: "JOB-1842",
-    model: "GPT-Vision-Pro",
-    status: "failed",
-    cost: "0.00 MATIC",
-    completedAt: "2 hours ago"
+    id: "MOD-3",
+    name: "Whisper-v3-Large",
+    category: "Audio Transcription",
+    description: "Robust multilingual speech recognition.",
+    runs: 3421,
   },
   {
-    id: "JOB-1841",
-    model: "NLP-Sentiment",
-    status: "completed",
-    cost: "0.03 MATIC",
-    completedAt: "3 hours ago"
+    id: "MOD-4",
+    name: "Mixtral-8x7B",
+    category: "MoE Language Model",
+    description: "Fast, efficient MoE model that matches GPT-3.5.",
+    runs: 2109,
   }
 ]
 
 export default function BuyerDashboard() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen pb-12">
       <DashboardHeader 
         title="Dashboard" 
         subtitle="Monitor your AI inference jobs"
@@ -138,7 +152,7 @@ export default function BuyerDashboard() {
                     {stat.change}
                   </div>
                 </div>
-                <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br ${stat.color}`}>
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-linear-to-br ${stat.color}`}>
                   <stat.icon className={`h-5 w-5 ${stat.title === 'Active Jobs' ? 'animate-spin' : ''}`} />
                 </div>
               </div>
@@ -149,7 +163,7 @@ export default function BuyerDashboard() {
         {/* Quick Actions */}
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           <Link href="/marketplace">
-            <Card className="group flex cursor-pointer items-center gap-4 border-border/40 bg-gradient-to-br from-primary/10 to-primary/5 p-6 transition-all hover:border-primary/40">
+            <Card className="group flex cursor-pointer items-center gap-4 border-border/40 bg-linear-to-br from-primary/10 to-primary/5 p-6 transition-all hover:border-primary/40">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/20">
                 <Store className="h-6 w-6 text-primary" />
               </div>
@@ -161,7 +175,7 @@ export default function BuyerDashboard() {
             </Card>
           </Link>
           <Link href="/buyer/jobs">
-            <Card className="group flex cursor-pointer items-center gap-4 border-border/40 bg-gradient-to-br from-accent/10 to-accent/5 p-6 transition-all hover:border-accent/40">
+            <Card className="group flex cursor-pointer items-center gap-4 border-border/40 bg-linear-to-br from-accent/10 to-accent/5 p-6 transition-all hover:border-accent/40">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/20">
                 <Play className="h-6 w-6 text-accent" />
               </div>
@@ -174,87 +188,89 @@ export default function BuyerDashboard() {
           </Link>
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <div className="mt-6">
           {/* Active Jobs */}
           <Card className="border-border/40 bg-card/30 p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold">Active Jobs</h2>
               <span className="rounded-full bg-chart-4/20 px-2 py-1 text-xs font-medium text-chart-4">
-                {activeJobs.length} running
+                {activeJobs.filter(j => ['running', 'assigned', 'pending'].includes(j.status)).length} active
               </span>
             </div>
             <div className="space-y-4">
               {activeJobs.map((job) => (
-                <div key={job.id} className="rounded-xl border border-border/40 bg-muted/30 p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="font-medium">{job.model}</p>
-                      <p className="text-xs text-muted-foreground">{job.id}</p>
-                    </div>
-                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${
-                      job.status === 'running'
-                        ? 'bg-primary/20 text-primary'
+                <Link key={job.id} href={`/buyer/jobs/${job.id}`}>
+                  <div className="rounded-xl border border-border/40 bg-muted/30 p-4 transition-all hover:border-primary/40 hover:bg-muted/50 mb-4 cursor-pointer">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="font-medium">{job.model}</p>
+                        <p className="text-xs text-muted-foreground">{job.id}</p>
+                      </div>
+                      <span className={`rounded-full px-2 py-1 text-xs font-medium capitalize ${
+                        job.status === 'running' ? 'bg-primary/20 text-primary'
+                        : job.status === 'assigned' ? 'bg-accent/20 text-accent'
+                        : job.status === 'completed' ? 'bg-green-500/20 text-green-500'
+                        : job.status === 'failed' ? 'bg-destructive/20 text-destructive'
                         : 'bg-chart-4/20 text-chart-4'
-                    }`}>
-                      {job.status === 'running' ? 'Running' : 'Pending'}
-                    </span>
-                  </div>
-                  <div className="mt-3">
-                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                      <span>Progress</span>
-                      <span>{job.progress}%</span>
+                      }`}>
+                        {job.status}
+                      </span>
                     </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div 
-                        className="h-full bg-primary transition-all duration-500"
-                        style={{ width: `${job.progress}%` }}
-                      />
+                    <div className="mt-3">
+                      <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                        <span>Progress</span>
+                        <span>{job.progress}%</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div 
+                          className={`h-full transition-all duration-500 ${
+                            job.status === 'failed' ? 'bg-destructive'
+                            : job.status === 'completed' ? 'bg-green-500'
+                            : job.status === 'assigned' ? 'bg-accent'
+                            : 'bg-primary'
+                          }`}
+                          style={{ width: `${job.progress}%` }}
+                        />
+                      </div>
                     </div>
+                    <p className="mt-2 text-xs text-muted-foreground">Started {job.startedAt}</p>
                   </div>
-                  <p className="mt-2 text-xs text-muted-foreground">Started {job.startedAt}</p>
-                </div>
+                </Link>
               ))}
             </div>
           </Card>
+        </div>
 
-          {/* Recent Jobs */}
-          <Card className="border-border/40 bg-card/30 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold">Recent Jobs</h2>
-              <Link href="/buyer/history" className="text-sm text-primary hover:text-primary/90">
-                View all
-              </Link>
-            </div>
-            <div className="space-y-4">
-              {recentJobs.map((job) => (
-                <div key={job.id} className="flex items-center gap-4">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                    job.status === 'completed'
-                      ? 'bg-accent/20'
-                      : 'bg-destructive/20'
-                  }`}>
-                    {job.status === 'completed' ? (
-                      <CheckCircle className="h-5 w-5 text-accent" />
-                    ) : (
-                      <AlertCircle className="h-5 w-5 text-destructive" />
-                    )}
+        {/* Model Recommendations Section */}
+        <div className="mt-8">
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold">Model Recommendations</h2>
+            <p className="text-sm text-muted-foreground">Based on your history</p>
+          </div>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {recommendedModels.map((model) => (
+              <Card key={model.id} className="flex flex-col border-border/40 bg-card/30 p-6 transition-all hover:border-primary/40 hover:bg-muted/30">
+                <div className="flex-1">
+                  <div className="mb-2">
+                    <h3 className="font-semibold text-lg leading-tight">{model.name}</h3>
+                    <p className="text-xs font-medium text-primary mt-1">{model.category}</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{job.model}</p>
-                    <p className="text-xs text-muted-foreground">{job.id}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-medium ${
-                      job.status === 'completed' ? 'text-accent' : 'text-destructive'
-                    }`}>
-                      {job.status === 'completed' ? `-${job.cost}` : 'Refunded'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{job.completedAt}</p>
+                  <p className="text-sm text-muted-foreground mt-3 mb-6 line-clamp-2">
+                    {model.description}
+                  </p>
+                  <div className="text-xs text-muted-foreground mb-4">
+                    {model.runs.toLocaleString()} total runs
                   </div>
                 </div>
-              ))}
-            </div>
-          </Card>
+                <Link href={`/marketplace`}>
+                  <Button className="w-full gap-2">
+                    <Play className="h-4 w-4" />
+                    Run Inference
+                  </Button>
+                </Link>
+              </Card>
+            ))}
+          </div>
         </div>
       </div>
     </div>
