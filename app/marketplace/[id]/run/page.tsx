@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter, useParams } from "next/navigation"
-import { useAccount } from "wagmi"
+import { useAccount, usePublicClient, useWriteContract } from "wagmi"
+import { decodeEventLog, parseEther, parseGwei } from "viem"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
@@ -19,6 +20,14 @@ import {
   Loader2,
 } from "lucide-react"
 import { fetchModelById, type MarketplaceModel } from "@/lib/model-api"
+import JobManagerABI from "@/lib/abis/ModelVerseJobManagerABI.json"
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"
+const INFERENCE_JOB_MANAGER_ADDRESS =
+  (process.env.NEXT_PUBLIC_INFERENCE_JOB_MANAGER_ADDRESS ??
+    "0x0000000000000000000000000000000000000000") as `0x${string}`
+const MIN_PRIORITY_FEE_WEI = parseGwei("25")
+const MIN_MAX_FEE_WEI = parseGwei("30")
 
 const steps = [
   { id: 1, name: "Input Data", icon: FileJson },
@@ -30,6 +39,8 @@ export default function RunInferencePage() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const { address } = useAccount()
+  const publicClient = usePublicClient()
+  const { writeContractAsync } = useWriteContract()
   const [currentStep, setCurrentStep] = useState(1)
   const [inputData, setInputData] = useState('{\n  "input": "sample_value"\n}')
   const [isProcessing, setIsProcessing] = useState(false)
@@ -77,10 +88,127 @@ export default function RunInferencePage() {
     if (currentStep > 1) setCurrentStep(currentStep - 1)
   }
 
+  const encodeInputBase64 = (value: string): string => {
+    try {
+      const bytes = new TextEncoder().encode(value)
+      let binary = ""
+      for (const byte of bytes) {
+        binary += String.fromCharCode(byte)
+      }
+      return window.btoa(binary)
+    } catch {
+      return ""
+    }
+  }
+
   const handleSubmit = async () => {
+    if (!model) {
+      setError("Model not found.")
+      return
+    }
+    if (!address) {
+      setError("Connect your wallet before running inference.")
+      return
+    }
+    if (!validateJson()) {
+      return
+    }
+
+    const modelChainId = model.chainModelId
+    if (modelChainId == null || !Number.isFinite(modelChainId) || modelChainId < 0) {
+      setError("This model is not linked to an on-chain model ID yet.")
+      return
+    }
+
+    const totalMatic = Number((modelPrice + platformFee).toFixed(6))
+    if (totalMatic <= 0) {
+      setError("Model price is invalid.")
+      return
+    }
+
     setIsProcessing(true)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    router.push("/buyer/jobs")
+    setError("")
+
+    try {
+      const estimatedFees = await publicClient?.estimateFeesPerGas().catch(() => null)
+      const maxPriorityFeePerGas = (() => {
+        const candidate = estimatedFees?.maxPriorityFeePerGas
+        if (candidate && candidate > MIN_PRIORITY_FEE_WEI) return candidate
+        return MIN_PRIORITY_FEE_WEI
+      })()
+      const maxFeePerGas = (() => {
+        const candidate = estimatedFees?.maxFeePerGas
+        const minCandidate = MIN_MAX_FEE_WEI > maxPriorityFeePerGas ? MIN_MAX_FEE_WEI : (maxPriorityFeePerGas + parseGwei("2"))
+        if (candidate && candidate > minCandidate) return candidate
+        return minCandidate
+      })()
+
+      const txHash = await writeContractAsync({
+        address: INFERENCE_JOB_MANAGER_ADDRESS,
+        abi: JobManagerABI,
+        functionName: "createJob",
+        args: [BigInt(modelChainId)],
+        value: parseEther(totalMatic.toString()),
+        maxPriorityFeePerGas,
+        maxFeePerGas,
+      })
+
+      if (!publicClient) {
+        throw new Error("Wallet client not ready")
+      }
+
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+
+      let blockchainJobId: bigint | null = null
+      for (const log of receipt.logs) {
+        try {
+          const decoded = decodeEventLog({
+            abi: JobManagerABI,
+            data: log.data,
+            topics: log.topics,
+          }) as { eventName: string; args?: { jobId?: bigint } }
+          if (decoded.eventName === "JobCreated" && decoded.args?.jobId != null) {
+            blockchainJobId = decoded.args.jobId
+            break
+          }
+        } catch {
+          // Ignore unrelated logs.
+        }
+      }
+
+      if (blockchainJobId == null) {
+        throw new Error("Transaction confirmed but JobCreated event not found")
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/jobs/create-from-chain`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-wallet-address": address.toLowerCase(),
+        },
+        body: JSON.stringify({
+          blockchain_job_id: blockchainJobId.toString(),
+          model_id: model.id,
+          model_cid: model.ipfsCid || null,
+          model_hash: null,
+          model_input_type: "json",
+          input_base64: encodeInputBase64(inputData),
+          creator_wallet: model.creatorWallet || null,
+          payment_amount: totalMatic,
+        }),
+      })
+
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.detail || payload?.message || "Failed to save job")
+      }
+
+      router.push("/buyer/jobs?submitted=1")
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Failed to create job")
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   const modelPrice = model?.price ?? 0
@@ -101,6 +229,12 @@ export default function RunInferencePage() {
           </Link>
 
           <h1 className="text-2xl font-bold mb-8">Run Inference</h1>
+
+          {!!error && (
+            <Card className="border-destructive/40 bg-destructive/10 p-4 mb-6">
+              <p className="text-sm text-destructive">{error}</p>
+            </Card>
+          )}
 
           {isLoadingModel && (
             <Card className="border-border/40 bg-card/30 p-6 mb-6">

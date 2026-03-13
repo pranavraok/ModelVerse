@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { formatEther } from "viem"
-import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi"
+import { decodeEventLog, formatEther, parseGwei } from "viem"
+import { useAccount, usePublicClient, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi"
 import { DashboardHeader } from "@/components/dashboard/header"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -27,10 +27,16 @@ import {
   ShieldCheck
 } from "lucide-react"
 import StakeRegistryABI from "@/lib/abis/ModelVerseStakeRegistryABI.json"
+import ModelRegistryABI from "@/lib/abis/ModelRegistryABI.json"
 
 const STAKE_REGISTRY_ADDRESS =
   (process.env.NEXT_PUBLIC_STAKE_REGISTRY_ADDRESS ??
     "0x818e9Df23c8A2B61b7796b0A081C0bA1014d1d91") as `0x${string}`
+const MODEL_REGISTRY_ADDRESS =
+  (process.env.NEXT_PUBLIC_MODEL_REGISTRY_ADDRESS ??
+    "0x818e9Df23c8A2B61b7796b0A081C0bA1014d1d91") as `0x${string}`
+const MIN_PRIORITY_FEE_WEI = parseGwei("25")
+const MIN_MAX_FEE_WEI = parseGwei("30")
 
 const categories = [
   { value: "image-recognition", label: "Image Recognition" },
@@ -51,6 +57,7 @@ const steps = [
 export default function UploadModelPage() {
   const router = useRouter()
   const { address, isConnected } = useAccount()
+  const publicClient = usePublicClient()
   const { writeContractAsync } = useWriteContract()
   const [currentStep, setCurrentStep] = useState(1)
   const [stepError, setStepError] = useState("")
@@ -200,14 +207,101 @@ export default function UploadModelPage() {
           signal: controller.signal,
         })
 
-        setUploadProgress(80)
+        setUploadProgress(60)
 
         const data = await response.json().catch(() => ({}))
         if (!response.ok) {
           throw new Error(data?.detail || data?.message || "Upload failed")
         }
 
+        const modelId = String(data?.model_id || "")
         const cid = String(data?.ipfs_cid || "")
+        if (!modelId) {
+          throw new Error("Upload succeeded but model_id was missing")
+        }
+        if (!cid) {
+          throw new Error("Upload succeeded but IPFS CID was missing")
+        }
+
+        setUploadProgress(75)
+        const estimatedFees = await publicClient?.estimateFeesPerGas().catch(() => null)
+        const maxPriorityFeePerGas = (() => {
+          const candidate = estimatedFees?.maxPriorityFeePerGas
+          if (candidate && candidate > MIN_PRIORITY_FEE_WEI) return candidate
+          return MIN_PRIORITY_FEE_WEI
+        })()
+        const maxFeePerGas = (() => {
+          const candidate = estimatedFees?.maxFeePerGas
+          const minCandidate = MIN_MAX_FEE_WEI > maxPriorityFeePerGas ? MIN_MAX_FEE_WEI : (maxPriorityFeePerGas + parseGwei("2"))
+          if (candidate && candidate > minCandidate) return candidate
+          return minCandidate
+        })()
+
+        const registerTxHash = await writeContractAsync({
+          address: MODEL_REGISTRY_ADDRESS,
+          abi: ModelRegistryABI,
+          functionName: "registerModel",
+          args: [address, cid],
+          maxPriorityFeePerGas,
+          maxFeePerGas,
+        })
+
+        if (!publicClient) {
+          throw new Error("Wallet client not ready")
+        }
+
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: registerTxHash })
+        setUploadProgress(88)
+
+        let chainModelId: bigint | null = null
+        for (const log of receipt.logs) {
+          try {
+            const decoded = decodeEventLog({
+              abi: ModelRegistryABI,
+              data: log.data,
+              topics: log.topics,
+            }) as { eventName: string; args?: { modelId?: bigint } }
+            if (decoded.eventName === "ModelRegistered" && decoded.args?.modelId != null) {
+              chainModelId = decoded.args.modelId
+              break
+            }
+          } catch {
+            // Ignore unrelated logs.
+          }
+        }
+
+        if (chainModelId == null) {
+          throw new Error("Model registration confirmed but ModelRegistered event was not found")
+        }
+
+        const linkPayload = JSON.stringify({
+          chain_model_id: chainModelId.toString(),
+          register_tx_hash: registerTxHash,
+        })
+
+        let linkResponse: Response | null = null
+        let linkData: Record<string, unknown> = {}
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          linkResponse = await fetch(`${apiBase}/api/models/${encodeURIComponent(modelId)}/link-chain-id`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-wallet-address": address,
+            },
+            body: linkPayload,
+          })
+          linkData = await linkResponse.json().catch(() => ({})) as Record<string, unknown>
+          if (linkResponse.ok) {
+            break
+          }
+          if (attempt === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 700))
+          }
+        }
+        if (!linkResponse || !linkResponse.ok) {
+          throw new Error(String(linkData?.detail || linkData?.message || "Failed to link on-chain model ID"))
+        }
+
         setUploadedCid(cid)
         setUploadProgress(100)
 
