@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Cpu, Upload, ShoppingCart, ArrowRight, Check } from "lucide-react"
@@ -72,97 +73,96 @@ export default function SelectRolePage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
-      {/* Background effects */}
-      <div className="fixed inset-0 -z-10">
-        <div className="absolute top-1/4 left-1/2 h-150 w-150 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-[120px]" />
-        <div className="absolute bottom-1/4 right-1/4 h-100 w-100 rounded-full bg-accent/10 blur-[100px]" />
+    <div className="w-full max-w-6xl z-10 relative">
+      {/* Logo */}
+      <Link href="/" className="mb-8 flex items-center justify-center drop-shadow-[0_0_15px_rgba(139,92,246,0.3)]">
+        <Image
+          src="/logo.png"
+          alt="ModelVerse"
+          width={280}
+          height={76}
+          className="h-16 w-auto"
+          priority
+        />
+      </Link>
+
+      {/* Header */}
+      <div className="text-center mb-12 drop-shadow-[0_0_10px_rgba(0,0,0,0.8)]">
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl text-white">
+          Choose your role
+        </h1>
+        <p className="mt-2 text-white/70">
+          Select how you want to use the platform. You can change this later.
+        </p>
       </div>
 
-      <div className="w-full max-w-6xl z-10">
-        {/* Logo */}
-        <Link href="/" className="flex items-center justify-center gap-2 mb-8">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20">
-            <Cpu className="h-5 w-5 text-primary" />
-          </div>
-          <span className="text-xl font-semibold tracking-tight">NeuralMarket</span>
-        </Link>
-
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Choose your role
-          </h1>
-          <p className="mt-2 text-muted-foreground">
-            Select how you want to use NeuralMarket. You can change this later.
-          </p>
-        </div>
-
-        {/* Role cards */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          {roles.map((role) => (
-            <button
-              key={role.id}
-              onClick={() => setSelectedRole(role.id)}
-              className={`group relative rounded-2xl border p-6 text-left transition-all ${
-                selectedRole === role.id
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border/40 bg-card/30 hover:border-border/60 hover:bg-card/50'
-              }`}
-            >
-              {/* Selected indicator */}
-              {selectedRole === role.id && (
-                <div className="absolute top-4 right-4 flex h-6 w-6 items-center justify-center rounded-full bg-primary">
-                  <Check className="h-4 w-4 text-primary-foreground" />
-                </div>
-              )}
-
-              {/* Icon */}
-              <div className={`mb-4 inline-flex h-14 w-14 items-center justify-center rounded-xl bg-linear-to-br ${role.gradient}`}>
-                <role.icon className="h-7 w-7 text-foreground" />
-              </div>
-
-              {/* Title & Description */}
-              <h3 className="text-xl font-semibold">{role.title}</h3>
-              <p className="mt-1 text-muted-foreground">{role.description}</p>
-
-              {/* Features */}
-              <ul className="mt-6 space-y-3">
-                {role.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10">
-                      <Check className="h-3 w-3 text-primary" />
-                    </div>
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-            </button>
-          ))}
-        </div>
-
-        {/* Continue button */}
-        <div className="mt-8 flex flex-col items-center gap-4">
-          <Button
-            size="lg"
-            className="w-full max-w-md bg-primary hover:bg-primary/90"
-            disabled={!selectedRole || isLoading}
-            onClick={handleContinue}
+      {/* Role cards */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {roles.map((role) => (
+          <button
+            key={role.id}
+            onClick={() => setSelectedRole(role.id)}
+            className={`group relative rounded-3xl border p-6 text-left transition-all duration-300 overflow-hidden ${
+              selectedRole === role.id
+                ? 'border-primary/80 bg-primary/20 shadow-[0_0_30px_rgba(139,92,246,0.4)] scale-105'
+                : 'border-white/10 bg-black/40 hover:border-white/30 hover:bg-black/60 hover:shadow-[0_0_25px_rgba(255,255,255,0.1)] hover:-translate-y-2'
+            }`}
           >
-            {isLoading ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-            ) : (
-              <>
-                Continue as {selectedRole ? roles.find(r => r.id === selectedRole)?.title : '...'}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </>
+            {/* Selected indicator */}
+            {selectedRole === role.id && (
+              <div className="absolute top-4 right-4 flex h-6 w-6 items-center justify-center rounded-full bg-primary shadow-[0_0_10px_rgba(139,92,246,0.8)]">
+                <Check className="h-4 w-4 text-primary-foreground" />
+              </div>
             )}
-          </Button>
-          
-          <p className="text-sm text-muted-foreground">
-            You can switch roles anytime from your dashboard settings
-          </p>
-        </div>
+
+            {/* Glowing orb behind icon */}
+            <div className={`absolute -top-10 -left-10 h-32 w-32 rounded-full blur-[40px] opacity-40 mix-blend-screen bg-linear-to-br ${role.gradient} transition-all duration-500 group-hover:opacity-80`} />
+
+            {/* Icon */}
+            <div className={`mb-4 relative inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br ${role.gradient} border border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.5)]`}>
+              <role.icon className="h-7 w-7 text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
+            </div>
+
+            {/* Title & Description */}
+            <h3 className="text-xl font-bold text-white relative z-10">{role.title}</h3>
+            <p className="mt-1 text-white/60 relative z-10">{role.description}</p>
+
+            {/* Features */}
+            <ul className="mt-6 space-y-3 relative z-10">
+              {role.features.map((feature) => (
+                <li key={feature} className="flex items-center gap-2 text-sm text-white/80">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 border border-primary/30">
+                    <Check className="h-3 w-3 text-primary drop-shadow-[0_0_5px_rgba(139,92,246,0.8)]" />
+                  </div>
+                  {feature}
+                </li>
+              ))}
+            </ul>
+          </button>
+        ))}
+      </div>
+
+      {/* Continue button */}
+      <div className="mt-10 flex flex-col items-center gap-4 relative z-10">
+        <Button
+          size="lg"
+          className="w-full max-w-md h-14 text-lg font-semibold rounded-2xl bg-linear-to-r from-primary to-primary/80 text-primary-foreground shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all hover:shadow-[0_0_30px_rgba(139,92,246,0.6)] hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none"
+          disabled={!selectedRole || isLoading}
+          onClick={handleContinue}
+        >
+          {isLoading ? (
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+          ) : (
+            <>
+              Continue as {selectedRole ? roles.find(r => r.id === selectedRole)?.title : '...'}
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </>
+          )}
+        </Button>
+        
+        <p className="text-sm text-white/50 text-center drop-shadow-[0_0_5px_rgba(0,0,0,0.8)]">
+          You can switch roles anytime from your dashboard settings
+        </p>
       </div>
     </div>
   )

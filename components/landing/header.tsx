@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Menu, X } from "lucide-react"
 
@@ -10,22 +11,16 @@ export function Header() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 w-full border-b border-white/5 bg-background/60 backdrop-blur-3xl saturate-150 transition-all duration-300">
-      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-2 group cursor-pointer">
-          <div className="relative flex h-8 w-8 items-center justify-center mr-1">
-            {/* Glowing backdrop */}
-            <div className="absolute inset-0 rounded-full bg-linear-to-tr from-blue-500 to-purple-500 opacity-40 blur-md group-hover:opacity-70 transition-opacity duration-500"></div>
-            
-            {/* Minimalist Orbit Shape */}
-            <div className="relative h-6 w-6">
-              <div className="absolute inset-0 rounded-full border-[2.5px] border-white/90 scale-x-110 -rotate-45 transition-transform duration-500 group-hover:rotate-0"></div>
-              <div className="absolute inset-0 rounded-full border-[2.5px] border-blue-400/80 scale-x-110 rotate-45 transition-transform duration-500 group-hover:rotate-90"></div>
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-white shadow-[0_0_10px_2px_rgba(255,255,255,0.8)]"></div>
-            </div>
-          </div>
-          <span className="text-xl font-bold tracking-tight text-white/90 group-hover:text-white transition-colors duration-300">
-            Model<span className="font-light text-white/50 group-hover:text-white/70 transition-colors duration-300">Verse</span>
-          </span>
+      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-3">
+        <div className="group cursor-pointer">
+          <Image
+            src="/logo.png"
+            alt="ModelVerse"
+            width={260}
+            height={70}
+            className="h-14 w-auto drop-shadow-[0_0_12px_rgba(139,92,246,0.35)] transition-all duration-300 group-hover:scale-[1.02]"
+            priority
+          />
         </div>
 
         <div className="hidden items-center gap-8 lg:flex">
