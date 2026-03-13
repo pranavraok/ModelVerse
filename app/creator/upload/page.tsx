@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { useAccount } from "wagmi"
 import { DashboardHeader } from "@/components/dashboard/header"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -41,9 +42,12 @@ const steps = [
 
 export default function UploadModelPage() {
   const router = useRouter()
+  const { address, isConnected } = useAccount()
   const [currentStep, setCurrentStep] = useState(1)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadError, setUploadError] = useState("")
+  const [uploadedCid, setUploadedCid] = useState("")
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -62,19 +66,78 @@ export default function UploadModelPage() {
   }
 
   const handleSubmit = async () => {
-    setIsUploading(true)
-    
-    // Simulate upload progress
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise(resolve => setTimeout(resolve, 200))
-      setUploadProgress(i)
+    setUploadError("")
+    setUploadedCid("")
+
+    if (!isConnected || !address) {
+      setUploadError("Connect your wallet before uploading.")
+      return
     }
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    // Redirect to models page
-    router.push('/creator/models')
+    if (!formData.name.trim()) {
+      setUploadError("Model name is required.")
+      return
+    }
+    if (!formData.file) {
+      setUploadError("Please select a .onnx or .tflite file.")
+      return
+    }
+
+    try {
+      setIsUploading(true)
+      setUploadProgress(15)
+
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"
+      const body = new FormData()
+      body.append("name", formData.name.trim())
+      body.append("description", formData.description)
+      body.append("category", formData.category || "other")
+      body.append("sample_input", formData.sampleInput)
+      body.append("expected_output", formData.expectedOutput)
+      body.append("price", formData.price || "0")
+      body.append("model_file", formData.file)
+
+      setUploadProgress(45)
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 45000)
+      try {
+        const response = await fetch(`${apiBase}/api/models/upload`, {
+          method: "POST",
+          headers: {
+            "x-wallet-address": address,
+          },
+          body,
+          signal: controller.signal,
+        })
+
+        setUploadProgress(80)
+
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error(data?.detail || data?.message || "Upload failed")
+        }
+
+        const cid = String(data?.ipfs_cid || "")
+        setUploadedCid(cid)
+        setUploadProgress(100)
+
+        setTimeout(() => {
+          router.push(`/creator/models?uploaded=1&cid=${encodeURIComponent(cid)}`)
+        }, 800)
+      } finally {
+        clearTimeout(timeoutId)
+      }
+    } catch (error) {
+      const message =
+        error instanceof DOMException && error.name === "AbortError"
+          ? "Upload timed out after 45s. Please check backend/Pinata and try again."
+          : error instanceof Error
+          ? error.message
+          : "Upload failed"
+      setUploadError(message)
+      setUploadProgress(0)
+      setIsUploading(false)
+    }
   }
 
   const nextStep = () => {
@@ -323,7 +386,9 @@ export default function UploadModelPage() {
               {isUploading ? (
                 <div className="flex flex-col items-center py-8">
                   <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                  <p className="mt-4 font-medium">Uploading to IPFS...</p>
+                  <p className="mt-4 font-medium">
+                    {uploadedCid ? "Uploaded successfully" : "Uploading to IPFS..."}
+                  </p>
                   <div className="mt-4 w-full max-w-xs">
                     <div className="h-2 overflow-hidden rounded-full bg-muted">
                       <div 
@@ -334,6 +399,11 @@ export default function UploadModelPage() {
                     <p className="mt-2 text-center text-sm text-muted-foreground">
                       {uploadProgress}%
                     </p>
+                    {uploadedCid && (
+                      <p className="mt-2 break-all text-center text-xs text-accent">
+                        CID: {uploadedCid}
+                      </p>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -374,6 +444,12 @@ export default function UploadModelPage() {
                       </p>
                     </div>
                   </div>
+
+                  {uploadError && (
+                    <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+                      {uploadError}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
