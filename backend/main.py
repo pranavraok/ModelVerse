@@ -7,6 +7,7 @@ import base64
 import mimetypes
 import subprocess
 import shutil
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Literal
@@ -160,6 +161,35 @@ def _response_to_dict(response: Any) -> dict[str, Any]:
     if callable(as_dict):
         return as_dict()
     return {}
+
+
+def _is_transient_supabase_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    transient_markers = (
+        "connectionterminated",
+        "connection terminated",
+        "timeout",
+        "timed out",
+        "connection reset",
+        "temporarily unavailable",
+        "server disconnected",
+    )
+    return any(marker in message for marker in transient_markers)
+
+
+def _execute_with_retry(action, retries: int = 3, base_delay_seconds: float = 0.4):
+    last_exc: Exception | None = None
+    for attempt in range(retries):
+        try:
+            return action()
+        except Exception as exc:
+            last_exc = exc
+            if attempt == retries - 1 or not _is_transient_supabase_error(exc):
+                raise
+            time.sleep(base_delay_seconds * (attempt + 1))
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("Unexpected retry state")
 
 
 def _extract_auth_payload(response: Any) -> tuple[dict[str, Any], dict[str, Any], str | None]:
@@ -614,6 +644,90 @@ def get_model_api(
     }
 
 
+class LinkChainModelRequest(BaseModel):
+    chain_model_id: int
+    register_tx_hash: str | None = None
+
+
+@app.post("/api/models/{model_id}/link-chain-id")
+def link_model_chain_id(
+    model_id: str,
+    payload: LinkChainModelRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    wallet = str(current_user["wallet"]).strip().lower()
+
+    if payload.chain_model_id < 0:
+        raise HTTPException(status_code=400, detail="chain_model_id must be zero or greater")
+
+    try:
+        response = _execute_with_retry(
+            lambda: (
+                supabase.table("models")
+                .select("*")
+                .eq("id", model_id)
+                .limit(1)
+                .execute()
+            )
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch model: {exc}") from exc
+
+    rows = response.data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    model_row = rows[0]
+    owner_wallet = str(
+        model_row.get("creator_wallet")
+        or model_row.get("creator_address")
+        or model_row.get("owner_wallet")
+        or model_row.get("wallet_address")
+        or model_row.get("wallet")
+        or model_row.get("creator")
+        or ""
+    ).strip().lower()
+
+    if owner_wallet and owner_wallet != wallet:
+        raise HTTPException(status_code=403, detail="You can only link your own model")
+
+    candidate_columns = ["chain_model_id", "register_tx_hash", "updated_at"]
+    existing = _existing_columns("models", candidate_columns)
+    if "chain_model_id" not in existing:
+        raise HTTPException(status_code=500, detail="models table is missing chain_model_id column")
+
+    update_payload: dict[str, Any] = {
+        "chain_model_id": int(payload.chain_model_id),
+    }
+    if "updated_at" in existing:
+        update_payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+    if "register_tx_hash" in existing and payload.register_tx_hash:
+        update_payload["register_tx_hash"] = payload.register_tx_hash
+
+    try:
+        update_response = _execute_with_retry(
+            lambda: (
+                supabase.table("models")
+                .update(update_payload)
+                .eq("id", model_id)
+                .execute()
+            )
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to link chain model id: {exc}") from exc
+
+    updated_rows = update_response.data or []
+    updated_id = int(payload.chain_model_id)
+    if updated_rows:
+        updated_id = int(updated_rows[0].get("chain_model_id") or payload.chain_model_id)
+
+    return {
+        "message": "Model linked to on-chain id",
+        "model_id": model_id,
+        "chain_model_id": updated_id,
+    }
+
+
 def _column_exists(table: str, column: str) -> bool:
     try:
         supabase.table(table).select(column).limit(1).execute()
@@ -681,6 +795,8 @@ async def upload_model_api(
         "category",
         "price",
         "price_per_inference",
+        "inference_price",
+        "price_matic",
         "sample_input",
         "expected_output",
         "ipfs_cid",
@@ -706,6 +822,8 @@ async def upload_model_api(
         "category": payload_base["category"],
         "price": payload_base["price"],
         "price_per_inference": payload_base["price"],
+        "inference_price": payload_base["price"],
+        "price_matic": payload_base["price"],
         "sample_input": payload_base["sample_input"],
         "expected_output": payload_base["expected_output"],
         "ipfs_cid": payload_base["ipfs_cid"],
@@ -752,10 +870,30 @@ async def upload_model_api(
     if not inserted_row:
         raise HTTPException(status_code=500, detail=f"Failed to insert model row: {insert_error}")
 
+    # Best-effort post-insert healing so price never remains null across schema variants.
+    price_columns = _existing_columns("models", ["price", "price_per_inference", "inference_price", "price_matic", "updated_at"])
+    if any(col in price_columns for col in ("price", "price_per_inference", "inference_price", "price_matic")):
+        update_payload: dict[str, Any] = {}
+        for col in ("price", "price_per_inference", "inference_price", "price_matic"):
+            if col in price_columns:
+                update_payload[col] = price_value
+        if "updated_at" in price_columns:
+            update_payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+        with suppress(Exception):
+            refreshed = (
+                supabase.table("models")
+                .update(update_payload)
+                .eq("id", model_id)
+                .execute()
+            )
+            if refreshed.data:
+                inserted_row = refreshed.data[0]
+
     return {
         "message": "Model uploaded",
         "model_id": str(inserted_row.get("id") or model_id),
         "ipfs_cid": str(inserted_row.get("ipfs_cid") or inserted_row.get("model_cid") or ipfs_cid),
+        "price": inserted_row.get("price") or inserted_row.get("price_per_inference") or price_value,
         "creator_wallet": wallet,
         "file_name": stored_name,
     }
@@ -915,6 +1053,18 @@ class AutoRegisterRequest(BaseModel):
     node_name: str | None = None
     stake_tx_hash: str | None = None
     stake_matic: float | None = None
+
+
+class CreateJobFromChainRequest(BaseModel):
+    blockchain_job_id: int
+    model_id: str
+    model_cid: str | None = None
+    model_hash: str | None = None
+    model_input_type: str | None = "image"
+    input_data_url: str | None = None
+    input_base64: str | None = None
+    creator_wallet: str | None = None
+    payment_amount: float | None = 0
  
  
 # ─────────────────────────── /api/nodes/auto-register ───────────────────────
@@ -1154,6 +1304,125 @@ def docker_stop(
  
 
 # ─────────────────────────── Jobs route ─────────────────────────────────────
+
+@app.post("/api/jobs/create-from-chain")
+def create_job_from_chain(
+    payload: CreateJobFromChainRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    buyer_wallet = str(current_user["wallet"]).strip().lower()
+    model_id = payload.model_id.strip()
+    if not model_id:
+        raise HTTPException(status_code=400, detail="model_id is required")
+
+    model_row: dict[str, Any] | None = None
+    try:
+        response = (
+            supabase.table("models")
+            .select("*")
+            .eq("id", model_id)
+            .limit(1)
+            .execute()
+        )
+        if response.data:
+            model_row = response.data[0]
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch model: {exc}") from exc
+
+    if not model_row:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    creator_wallet = (
+        str(payload.creator_wallet or "").strip().lower()
+        or str(
+            model_row.get("creator_wallet")
+            or model_row.get("creator_address")
+            or model_row.get("owner_wallet")
+            or model_row.get("wallet_address")
+            or model_row.get("wallet")
+            or model_row.get("creator")
+            or ""
+        ).strip().lower()
+    )
+
+    model_cid = (
+        str(payload.model_cid or "").strip()
+        or str(model_row.get("ipfs_cid") or model_row.get("model_cid") or "").strip()
+        or None
+    )
+    model_hash = str(payload.model_hash or "").strip() or None
+
+    payment_amount = payload.payment_amount
+    if payment_amount is None or payment_amount <= 0:
+        try:
+            payment_amount = float(model_row.get("price") or model_row.get("price_per_inference") or 0)
+        except Exception:
+            payment_amount = 0.0
+
+    candidate_columns = [
+        "blockchain_job_id",
+        "model_id",
+        "model_cid",
+        "model_hash",
+        "model_input_type",
+        "buyer_wallet",
+        "input_data_url",
+        "input_base64",
+        "creator_wallet",
+        "payment_amount",
+        "status",
+        "assigned_node_id",
+        "result_hash",
+        "result_url",
+        "result",
+        "execution_time_ms",
+        "completed_at",
+        "updated_at",
+    ]
+    existing = _existing_columns("jobs", candidate_columns)
+
+    values: dict[str, Any] = {
+        "blockchain_job_id": int(payload.blockchain_job_id),
+        "model_id": model_id,
+        "model_cid": model_cid,
+        "model_hash": model_hash,
+        "model_input_type": (payload.model_input_type or "image"),
+        "buyer_wallet": buyer_wallet,
+        "input_data_url": payload.input_data_url,
+        "input_base64": payload.input_base64,
+        "creator_wallet": creator_wallet or None,
+        "payment_amount": payment_amount,
+        "status": "pending",
+        "assigned_node_id": None,
+        "result_hash": None,
+        "result_url": None,
+        "result": None,
+        "execution_time_ms": None,
+        "completed_at": None,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    insert_payload = {key: value for key, value in values.items() if key in existing}
+
+    if "buyer_wallet" not in insert_payload:
+        raise HTTPException(status_code=500, detail="jobs table is missing buyer_wallet column")
+
+    try:
+        response = supabase.table("jobs").insert(insert_payload).execute()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to create job row: {exc}") from exc
+
+    rows = response.data or []
+    if not rows:
+        raise HTTPException(status_code=500, detail="Job insertion returned no row")
+
+    row = rows[0]
+    return {
+        "message": "Job created",
+        "job_id": row.get("id"),
+        "blockchain_job_id": row.get("blockchain_job_id", payload.blockchain_job_id),
+        "status": row.get("status", "pending"),
+    }
 
 @app.get("/api/jobs")
 def list_jobs(current_user: dict[str, Any] = Depends(get_current_user)):
