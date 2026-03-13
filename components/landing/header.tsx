@@ -49,8 +49,8 @@ export function Header() {
               Login
             </Button>
           </Link>
-          <Link href="/signup">
-            <Button size="sm" className="bg-primary hover:bg-primary/90">
+          <Link href="/select-role">
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_15px_rgba(139,92,246,0.3)] hover:shadow-[0_0_25px_rgba(139,92,246,0.5)] transition-all">
               Get Started
             </Button>
           </Link>
@@ -104,8 +104,9 @@ export function Header() {
               <Link href="/login">
                 <Button variant="ghost" className="w-full">Login</Button>
               </Link>
-              <Link href="/signup">
-                <Button className="w-full bg-primary hover:bg-primary/90">Get Started</Button>
+              <Link href="/select-role">
+                <Button className="w-full bg-primary hover:bg-primary/90 mt-2">
+                  Get Started</Button>
               </Link>
             </div>
           </div>

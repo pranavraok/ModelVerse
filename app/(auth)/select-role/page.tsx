@@ -67,14 +67,8 @@ export default function SelectRolePage() {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 500))
     
-    // Redirect based on role
-    if (selectedRole === 'creator') {
-      router.push('/creator')
-    } else if (selectedRole === 'buyer') {
-      router.push('/buyer')
-    } else {
-      router.push('/node-operator')
-    }
+    // Redirect to signup with selected role
+    router.push(`/signup?role=${selectedRole}`)
   }
 
   return (
