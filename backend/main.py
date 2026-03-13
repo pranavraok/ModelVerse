@@ -3,6 +3,8 @@ import uuid
 import json
 import asyncio
 import logging
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 from pathlib import Path
 from typing import Any, Literal
 from contextlib import suppress
@@ -148,6 +150,30 @@ def _get_user_from_token(token: str) -> dict[str, Any]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Failed to validate token: {exc}",
         ) from exc
+
+
+def _update_user_metadata_via_token(token: str, metadata: dict[str, Any]) -> None:
+    payload = json.dumps({"data": metadata}).encode("utf-8")
+    endpoint = f"{url.rstrip('/')}/auth/v1/user"
+    req = urllib_request.Request(
+        endpoint,
+        data=payload,
+        method="PUT",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "apikey": key,
+            "Content-Type": "application/json",
+        },
+    )
+
+    try:
+        with urllib_request.urlopen(req, timeout=15):
+            return
+    except urllib_error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore") if exc.fp else str(exc)
+        raise HTTPException(status_code=400, detail=f"Role update failed: {detail}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Role update failed: {exc}") from exc
 
 
 async def _web3_event_listener() -> None:
@@ -414,7 +440,9 @@ def auth_select_role(
     try:
         supabase.auth.admin.update_user_by_id(user_id, {"user_metadata": new_metadata})
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Role update failed: {exc}") from exc
+        # Some projects reject admin updates depending on key/project config.
+        # Fall back to updating the authenticated user with their own JWT.
+        _update_user_metadata_via_token(token, new_metadata)
 
     return {
         "message": "Role updated",

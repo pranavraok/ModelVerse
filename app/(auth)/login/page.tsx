@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Cpu, Eye, EyeOff, ArrowRight } from "lucide-react"
 import {
+  getCurrentUser,
   loginWithPassword,
   roleToDashboardPath,
   selectUserRole,
@@ -25,6 +26,8 @@ export default function LoginPage() {
   const searchParams = useSearchParams()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isOAuthProcessing, setIsOAuthProcessing] = useState(false)
+  const oauthHandledRef = useRef(false)
   const [selectedRole, setSelectedRole] = useState<UserRole>("creator")
   const [errorMessage, setErrorMessage] = useState("")
   const [formData, setFormData] = useState({
@@ -52,6 +55,77 @@ export default function LoginPage() {
     }
   }, [roleFromQuery])
 
+  useEffect(() => {
+    const processOAuthCallback = async () => {
+      if (oauthHandledRef.current) {
+        return
+      }
+
+      const hash = window.location.hash.startsWith("#")
+        ? window.location.hash.slice(1)
+        : window.location.hash
+      const hashParams = new URLSearchParams(hash)
+      const queryParams = new URLSearchParams(window.location.search)
+
+      const oauthError =
+        hashParams.get("error_description") ||
+        hashParams.get("error") ||
+        queryParams.get("error_description") ||
+        queryParams.get("error")
+
+      if (oauthError) {
+        setErrorMessage(decodeURIComponent(oauthError))
+        return
+      }
+
+      const accessToken = hashParams.get("access_token") || queryParams.get("access_token")
+      if (!accessToken) {
+        return
+      }
+
+      oauthHandledRef.current = true
+
+      setIsOAuthProcessing(true)
+      setErrorMessage("")
+
+      try {
+        const me = await getCurrentUser({ accessToken })
+        const metadataRole = me.user?.role
+        const pendingRole = localStorage.getItem("pendingRole")
+
+        const preferredRole: UserRole =
+          roleFromQuery ||
+          (pendingRole === "creator" || pendingRole === "buyer" || pendingRole === "node-operator"
+            ? pendingRole
+            : selectedRole)
+
+        let effectiveRole: UserRole = preferredRole
+        if (metadataRole === "creator" || metadataRole === "buyer" || metadataRole === "node-operator") {
+          if (metadataRole !== preferredRole) {
+            await selectUserRole({ role: preferredRole, accessToken })
+            effectiveRole = preferredRole
+          } else {
+            effectiveRole = metadataRole
+          }
+        } else {
+          await selectUserRole({ role: preferredRole, accessToken })
+        }
+
+        localStorage.setItem("accessToken", accessToken)
+        localStorage.setItem("userRole", effectiveRole)
+        localStorage.removeItem("pendingRole")
+
+        router.replace(roleToDashboardPath(effectiveRole))
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "OAuth login failed")
+      } finally {
+        setIsOAuthProcessing(false)
+      }
+    }
+
+    processOAuthCallback()
+  }, [roleFromQuery, router, selectedRole])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMessage("")
@@ -72,7 +146,12 @@ export default function LoginPage() {
       let effectiveRole = selectedRole
 
       if (apiRole === "creator" || apiRole === "buyer" || apiRole === "node-operator") {
-        effectiveRole = apiRole
+        if (apiRole !== selectedRole) {
+          await selectUserRole({ role: selectedRole, accessToken })
+          effectiveRole = selectedRole
+        } else {
+          effectiveRole = apiRole
+        }
       } else {
         await selectUserRole({ role: selectedRole, accessToken })
       }
@@ -101,7 +180,7 @@ export default function LoginPage() {
       return
     }
 
-    window.location.assign(`/login?role=${selectedRole}&provider=${provider}`)
+    setErrorMessage("NEXT_PUBLIC_SUPABASE_URL is missing. Configure it to enable Google/GitHub login.")
   }
 
   return (
@@ -204,9 +283,9 @@ export default function LoginPage() {
             <Button 
               type="submit" 
               className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all hover:shadow-[0_0_25px_rgba(139,92,246,0.5)] font-medium text-lg mt-4"
-              disabled={isLoading}
+              disabled={isLoading || isOAuthProcessing}
             >
-              {isLoading ? (
+              {isLoading || isOAuthProcessing ? (
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
               ) : (
                 <>
@@ -271,7 +350,7 @@ export default function LoginPage() {
         
         <p className="mt-8 text-center text-sm text-muted-foreground/80">
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="font-semibold text-foreground hover:text-primary transition-colors">
+          <Link href="/select-role" className="font-semibold text-foreground hover:text-primary transition-colors">
             Sign up for free
           </Link>
         </p>

@@ -82,8 +82,7 @@ export default function SignupPage() {
       return
     }
 
-    // Fallback if public Supabase URL is not configured.
-    window.location.assign(`/login?role=${selectedRole}&provider=${provider}`)
+    setErrorMessage("NEXT_PUBLIC_SUPABASE_URL is missing. Configure it to enable Google/GitHub signup.")
   }
 
   return (
@@ -260,7 +259,7 @@ export default function SignupPage() {
         
         <p className="mt-8 text-center text-sm text-muted-foreground/80">
           Already have an account?{" "}
-          <Link href="/login" className="font-semibold text-foreground hover:text-primary transition-colors">
+          <Link href={selectedRole ? `/login?role=${selectedRole}` : "/login"} className="font-semibold text-foreground hover:text-primary transition-colors">
             Sign in here
           </Link>
         </p>

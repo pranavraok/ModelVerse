@@ -22,6 +22,10 @@ interface SignupResponse {
   needs_role_selection?: boolean
 }
 
+interface MeResponse {
+  user: ApiUser
+}
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -81,5 +85,14 @@ export async function selectUserRole(payload: {
       Authorization: `Bearer ${payload.accessToken}`,
     },
     body: JSON.stringify({ role: payload.role }),
+  })
+}
+
+export async function getCurrentUser(payload: { accessToken: string }): Promise<MeResponse> {
+  return apiRequest<MeResponse>("/auth/me", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${payload.accessToken}`,
+    },
   })
 }
