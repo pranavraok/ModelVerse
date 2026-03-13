@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useAccount } from "wagmi"
+import { formatEther } from "viem"
+import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi"
 import { DashboardHeader } from "@/components/dashboard/header"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,8 +23,14 @@ import {
   Check, 
   AlertCircle,
   Loader2,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck
 } from "lucide-react"
+import StakeRegistryABI from "@/lib/abis/ModelVerseStakeRegistryABI.json"
+
+const STAKE_REGISTRY_ADDRESS =
+  (process.env.NEXT_PUBLIC_STAKE_REGISTRY_ADDRESS ??
+    "0x818e9Df23c8A2B61b7796b0A081C0bA1014d1d91") as `0x${string}`
 
 const categories = [
   { value: "image-recognition", label: "Image Recognition" },
@@ -34,20 +41,27 @@ const categories = [
 ]
 
 const steps = [
-  { id: 1, name: "Model Info" },
-  { id: 2, name: "Upload File" },
-  { id: 3, name: "Pricing" },
-  { id: 4, name: "Review" }
+  { id: 1, name: "Staking" },
+  { id: 2, name: "Model Info" },
+  { id: 3, name: "Upload File" },
+  { id: 4, name: "Pricing" },
+  { id: 5, name: "Review" }
 ]
 
 export default function UploadModelPage() {
   const router = useRouter()
   const { address, isConnected } = useAccount()
+  const { writeContractAsync } = useWriteContract()
   const [currentStep, setCurrentStep] = useState(1)
+  const [stepError, setStepError] = useState("")
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadError, setUploadError] = useState("")
   const [uploadedCid, setUploadedCid] = useState("")
+  const [stakeTxHash, setStakeTxHash] = useState<`0x${string}` | undefined>()
+  const [stakeError, setStakeError] = useState("")
+  const [isStaking, setIsStaking] = useState(false)
+  const [hasStakedInSession, setHasStakedInSession] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -57,6 +71,82 @@ export default function UploadModelPage() {
     expectedOutput: "",
     price: ""
   })
+
+  const {
+    data: requiredStakeRaw,
+    isLoading: isStakeAmountLoading,
+    error: requiredStakeError,
+  } = useReadContract({
+    address: STAKE_REGISTRY_ADDRESS,
+    abi: StakeRegistryABI,
+    functionName: "MODEL_STAKE_AMOUNT",
+  })
+
+  const { data: totalStakeRaw, error: totalStakeError } = useReadContract({
+    address: STAKE_REGISTRY_ADDRESS,
+    abi: StakeRegistryABI,
+    functionName: "getTotalStake",
+    args: address ? [address] : undefined,
+    query: {
+      enabled: Boolean(address),
+    },
+  })
+
+  const requiredStake = typeof requiredStakeRaw === "bigint" ? requiredStakeRaw : 0n
+  const totalStake = typeof totalStakeRaw === "bigint" ? totalStakeRaw : 0n
+  const hasExistingStake = totalStake > 0n
+  const isStakeSatisfied = hasStakedInSession || hasExistingStake
+  const stakeReadErrorMessage =
+    requiredStakeError?.message || totalStakeError?.message || ""
+
+  const { isLoading: isStakeConfirming, isSuccess: isStakeConfirmed } = useWaitForTransactionReceipt({
+    hash: stakeTxHash,
+  })
+
+  useEffect(() => {
+    if (isStakeConfirmed) {
+      setHasStakedInSession(true)
+      setStakeError("")
+      if (currentStep === 1) {
+        setCurrentStep(2)
+      }
+    }
+  }, [isStakeConfirmed, currentStep])
+
+  const handleStakeDeposit = async () => {
+    setStakeError("")
+    setStepError("")
+
+    if (!isConnected || !address) {
+      setStakeError("Connect your wallet before staking.")
+      return
+    }
+    if (requiredStake <= 0n) {
+      setStakeError("Could not read MODEL_STAKE_AMOUNT from contract.")
+      return
+    }
+
+    try {
+      setIsStaking(true)
+      const hash = await writeContractAsync({
+        address: STAKE_REGISTRY_ADDRESS,
+        abi: StakeRegistryABI,
+        functionName: "depositModelStake",
+        value: requiredStake,
+      })
+      setStakeTxHash(hash)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Staking transaction failed"
+      setStakeError(message)
+      setIsStaking(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isStakeConfirmed) {
+      setIsStaking(false)
+    }
+  }, [isStakeConfirmed])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -141,7 +231,38 @@ export default function UploadModelPage() {
   }
 
   const nextStep = () => {
-    if (currentStep < 4) setCurrentStep(currentStep + 1)
+    setStepError("")
+
+    if (currentStep === 1 && !isStakeSatisfied) {
+      setStepError("Complete the staking step before continuing.")
+      return
+    }
+
+    if (currentStep === 2) {
+      if (!formData.name.trim()) {
+        setStepError("Model name is required.")
+        return
+      }
+      if (!formData.category) {
+        setStepError("Select a category.")
+        return
+      }
+    }
+
+    if (currentStep === 3 && !formData.file) {
+      setStepError("Please upload a model file to continue.")
+      return
+    }
+
+    if (currentStep === 4) {
+      const numericPrice = Number(formData.price)
+      if (!formData.price || Number.isNaN(numericPrice) || numericPrice <= 0) {
+        setStepError("Enter a valid price greater than 0.")
+        return
+      }
+    }
+
+    if (currentStep < 5) setCurrentStep(currentStep + 1)
   }
 
   const prevStep = () => {
@@ -192,8 +313,78 @@ export default function UploadModelPage() {
         </div>
 
         <Card className="mx-auto max-w-2xl border-border/40 bg-card/30 p-8">
-          {/* Step 1: Model Info */}
+          {/* Step 1: Staking */}
           {currentStep === 1 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-semibold">Stake Before Upload</h2>
+                <p className="text-sm text-muted-foreground">
+                  Deposit the protocol-required stake before publishing models.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border/40 bg-muted/30 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-primary" />
+                  <p className="font-medium">ModelVerse Stake Registry</p>
+                </div>
+                <p className="text-xs text-muted-foreground break-all">
+                  Contract: {STAKE_REGISTRY_ADDRESS}
+                </p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Required stake</span>
+                  <span className="font-medium">
+                    {isStakeAmountLoading
+                      ? "Loading..."
+                      : requiredStake > 0n
+                      ? `${formatEther(requiredStake)} MATIC`
+                      : "Unavailable"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Your current total stake</span>
+                  <span className="font-medium">{formatEther(totalStake)} MATIC</span>
+                </div>
+                <div className="text-xs">
+                  {isStakeSatisfied ? (
+                    <span className="text-accent">Stake requirement satisfied.</span>
+                  ) : (
+                    <span className="text-muted-foreground">Stake is required before model submission.</span>
+                  )}
+                </div>
+                {stakeReadErrorMessage && (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive wrap-break-word">
+                    Contract read error: {stakeReadErrorMessage}
+                  </div>
+                )}
+              </div>
+
+              {!isStakeSatisfied && (
+                <Button
+                  onClick={handleStakeDeposit}
+                  disabled={!isConnected || isStaking || isStakeConfirming || isStakeAmountLoading || requiredStake <= 0n}
+                  className="bg-primary hover:bg-primary/90"
+                >
+                  {isStaking || isStakeConfirming ? "Processing Stake..." : "Deposit Stake"}
+                </Button>
+              )}
+
+              {stakeTxHash && (
+                <p className="text-xs break-all text-muted-foreground">
+                  Tx Hash: {stakeTxHash}
+                </p>
+              )}
+
+              {stakeError && (
+                <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+                  {stakeError}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 2: Model Info */}
+          {currentStep === 2 && (
             <div className="space-y-6">
               <div>
                 <h2 className="text-xl font-semibold">Model Information</h2>
@@ -247,8 +438,8 @@ export default function UploadModelPage() {
             </div>
           )}
 
-          {/* Step 2: Upload File */}
-          {currentStep === 2 && (
+          {/* Step 3: Upload File */}
+          {currentStep === 3 && (
             <div className="space-y-6">
               <div>
                 <h2 className="text-xl font-semibold">Upload Model File</h2>
@@ -319,8 +510,8 @@ export default function UploadModelPage() {
             </div>
           )}
 
-          {/* Step 3: Pricing */}
-          {currentStep === 3 && (
+          {/* Step 4: Pricing */}
+          {currentStep === 4 && (
             <div className="space-y-6">
               <div>
                 <h2 className="text-xl font-semibold">Set Your Price</h2>
@@ -373,8 +564,8 @@ export default function UploadModelPage() {
             </div>
           )}
 
-          {/* Step 4: Review */}
-          {currentStep === 4 && (
+          {/* Step 5: Review */}
+          {currentStep === 5 && (
             <div className="space-y-6">
               <div>
                 <h2 className="text-xl font-semibold">Review & Submit</h2>
@@ -410,6 +601,10 @@ export default function UploadModelPage() {
                 <div className="space-y-4">
                   <div className="rounded-xl border border-border/40 bg-muted/30 p-4">
                     <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Staking</p>
+                        <p className="font-medium">{isStakeSatisfied ? "Completed" : "Pending"}</p>
+                      </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Model Name</p>
                         <p className="font-medium">{formData.name || "Not set"}</p>
@@ -466,7 +661,7 @@ export default function UploadModelPage() {
               >
                 Back
               </Button>
-              {currentStep < 4 ? (
+              {currentStep < 5 ? (
                 <Button onClick={nextStep} className="bg-primary hover:bg-primary/90">
                   Continue
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -477,6 +672,12 @@ export default function UploadModelPage() {
                   <Upload className="ml-2 h-4 w-4" />
                 </Button>
               )}
+            </div>
+          )}
+
+          {stepError && !isUploading && (
+            <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+              {stepError}
             </div>
           )}
         </Card>
