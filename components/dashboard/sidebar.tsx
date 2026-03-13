@@ -28,7 +28,6 @@ interface SidebarProps {
 
 const creatorLinks = [
   { name: "Dashboard", href: "/creator", icon: LayoutDashboard },
-  { name: "Marketplace", href: "/marketplace?role=creator", icon: Store },
   { name: "Upload Model", href: "/creator/upload", icon: Upload },
   { name: "My Models", href: "/creator/models", icon: Package },
   { name: "Analytics", href: "/creator/analytics", icon: BarChart3 },
@@ -38,7 +37,7 @@ const creatorLinks = [
 
 const buyerLinks = [
   { name: "Dashboard", href: "/buyer", icon: LayoutDashboard },
-  { name: "Marketplace", href: "/marketplace?role=buyer", icon: Store },
+  { name: "Marketplace", href: "/marketplace", icon: Store },
   { name: "My Jobs", href: "/buyer/jobs", icon: Play },
   { name: "History", href: "/buyer/history", icon: History },
   { name: "Settings", href: "/buyer/settings", icon: Settings },
@@ -86,7 +85,7 @@ export function DashboardSidebar({ role }: SidebarProps) {
           {links.map((link) => {
             const isActive = pathname === link.href || 
               (link.href !== `/${role}` && link.href !== '/marketplace' && pathname.startsWith(link.href)) || 
-              (link.href === '/marketplace' && pathname === '/marketplace')
+              (link.href === '/marketplace' && pathname.startsWith('/marketplace'))
             
             return (
               <Link

@@ -1,13 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter, useParams } from "next/navigation"
+import { useAccount } from "wagmi"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Header } from "@/components/landing/header"
-import { 
+import {
   ArrowLeft,
   ArrowRight,
   Package,
@@ -15,30 +16,46 @@ import {
   Wallet,
   FileJson,
   AlertCircle,
-  Loader2
+  Loader2,
 } from "lucide-react"
+import { fetchModelById, type MarketplaceModel } from "@/lib/model-api"
 
 const steps = [
   { id: 1, name: "Input Data", icon: FileJson },
   { id: 2, name: "Review", icon: CheckCircle },
-  { id: 3, name: "Payment", icon: Wallet }
+  { id: 3, name: "Payment", icon: Wallet },
 ]
-
-// Mock model data
-const modelData = {
-  name: "GPT-Vision-Pro",
-  category: "Image Recognition",
-  price: 0.05,
-  platformFee: 0.0025
-}
 
 export default function RunInferencePage() {
   const router = useRouter()
-  const params = useParams()
+  const params = useParams<{ id: string }>()
+  const { address } = useAccount()
   const [currentStep, setCurrentStep] = useState(1)
-  const [inputData, setInputData] = useState('{\n  "image": "base64_encoded_image_data",\n  "options": {\n    "confidence_threshold": 0.8\n  }\n}')
+  const [inputData, setInputData] = useState('{\n  "input": "sample_value"\n}')
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState("")
+  const [model, setModel] = useState<MarketplaceModel | null>(null)
+  const [isLoadingModel, setIsLoadingModel] = useState(true)
+
+  useEffect(() => {
+    let ignore = false
+
+    const loadModel = async () => {
+      if (!params?.id) return
+      try {
+        setIsLoadingModel(true)
+        const item = await fetchModelById(params.id, address)
+        if (!ignore) setModel(item)
+      } finally {
+        if (!ignore) setIsLoadingModel(false)
+      }
+    }
+
+    void loadModel()
+    return () => {
+      ignore = true
+    }
+  }, [params?.id, address])
 
   const validateJson = () => {
     try {
@@ -62,55 +79,81 @@ export default function RunInferencePage() {
 
   const handleSubmit = async () => {
     setIsProcessing(true)
-    // Simulate MetaMask transaction
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    // Redirect to job status page
-    router.push('/buyer/jobs/JOB-1848')
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    router.push("/buyer/jobs")
   }
+
+  const modelPrice = model?.price ?? 0
+  const platformFee = Number((modelPrice * 0.05).toFixed(6))
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <main className="pt-24 pb-16">
         <div className="mx-auto max-w-3xl px-6 lg:px-8">
-          {/* Back Button */}
-          <Link href={`/marketplace/${params.id}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
+          <Link
+            href={`/marketplace/${params.id}`}
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
+          >
             <ArrowLeft className="h-4 w-4" />
             Back to Model
           </Link>
 
           <h1 className="text-2xl font-bold mb-8">Run Inference</h1>
 
-          {/* Progress Steps */}
+          {isLoadingModel && (
+            <Card className="border-border/40 bg-card/30 p-6 mb-6">
+              <p className="text-sm text-muted-foreground">Loading model pricing...</p>
+            </Card>
+          )}
+
+          {!isLoadingModel && !model && (
+            <Card className="border-border/40 bg-card/30 p-6 mb-6">
+              <p className="text-sm text-destructive">Model not found.</p>
+            </Card>
+          )}
+
+          {!!model && (
+            <div className="mb-6 rounded-xl border border-border/40 bg-muted/30 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                  <Package className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold">{model.name}</p>
+                  <p className="text-xs text-muted-foreground">{model.category}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="mb-8">
             <div className="flex items-center justify-between">
               {steps.map((step, index) => (
                 <div key={step.id} className="flex items-center">
                   <div className="flex items-center">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
-                      currentStep > step.id
-                        ? 'border-accent bg-accent text-accent-foreground'
-                        : currentStep === step.id
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border bg-muted/50 text-muted-foreground'
-                    }`}>
-                      {currentStep > step.id ? (
-                        <CheckCircle className="h-5 w-5" />
-                      ) : (
-                        <step.icon className="h-5 w-5" />
-                      )}
+                    <div
+                      className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
+                        currentStep > step.id
+                          ? "border-accent bg-accent text-accent-foreground"
+                          : currentStep === step.id
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-muted/50 text-muted-foreground"
+                      }`}
+                    >
+                      {currentStep > step.id ? <CheckCircle className="h-5 w-5" /> : <step.icon className="h-5 w-5" />}
                     </div>
-                    <span className={`ml-3 text-sm font-medium hidden sm:block ${
-                      currentStep >= step.id ? 'text-foreground' : 'text-muted-foreground'
-                    }`}>
+                    <span
+                      className={`ml-3 text-sm font-medium hidden sm:block ${
+                        currentStep >= step.id ? "text-foreground" : "text-muted-foreground"
+                      }`}
+                    >
                       {step.name}
                     </span>
                   </div>
                   {index < steps.length - 1 && (
-                    <div className={`mx-4 h-0.5 w-12 sm:w-24 ${
-                      currentStep > step.id ? 'bg-accent' : 'bg-border'
-                    }`} />
+                    <div className={`mx-4 h-0.5 w-12 sm:w-24 ${currentStep > step.id ? "bg-accent" : "bg-border"}`} />
                   )}
                 </div>
               ))}
@@ -118,14 +161,11 @@ export default function RunInferencePage() {
           </div>
 
           <Card className="border-border/40 bg-card/30 p-8">
-            {/* Step 1: Input Data */}
             {currentStep === 1 && (
               <div className="space-y-6">
                 <div>
                   <h2 className="text-xl font-semibold">Input Data</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Provide the JSON input for your inference request
-                  </p>
+                  <p className="text-sm text-muted-foreground">Provide the JSON input for your inference request</p>
                 </div>
 
                 <div>
@@ -145,45 +185,32 @@ export default function RunInferencePage() {
                       setError("")
                     }}
                     placeholder="Enter JSON input..."
-                    className={`font-mono text-sm bg-input/50 min-h-64 ${error ? 'border-destructive' : ''}`}
+                    className={`font-mono text-sm bg-input/50 min-h-64 ${error ? "border-destructive" : ""}`}
                   />
                 </div>
               </div>
             )}
 
-            {/* Step 2: Review */}
             {currentStep === 2 && (
               <div className="space-y-6">
                 <div>
                   <h2 className="text-xl font-semibold">Review Details</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Confirm your inference request before payment
-                  </p>
+                  <p className="text-sm text-muted-foreground">Confirm your inference request before payment</p>
                 </div>
 
                 <div className="rounded-xl border border-border/40 bg-muted/30 p-6 space-y-4">
-                  <div className="flex items-center gap-4 pb-4 border-b border-border/40">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-                      <Package className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-semibold">{modelData.name}</p>
-                      <p className="text-sm text-muted-foreground">{modelData.category}</p>
-                    </div>
-                  </div>
-
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Model price</span>
-                      <span>{modelData.price} MATIC</span>
+                      <span>{modelPrice} MATIC</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Platform fee (5%)</span>
-                      <span>{modelData.platformFee} MATIC</span>
+                      <span>{platformFee} MATIC</span>
                     </div>
                     <div className="flex justify-between font-semibold pt-2 border-t border-border/40">
                       <span>Total</span>
-                      <span className="text-primary">{modelData.price + modelData.platformFee} MATIC</span>
+                      <span className="text-primary">{modelPrice + platformFee} MATIC</span>
                     </div>
                   </div>
                 </div>
@@ -197,14 +224,11 @@ export default function RunInferencePage() {
               </div>
             )}
 
-            {/* Step 3: Payment */}
             {currentStep === 3 && (
               <div className="space-y-6">
                 <div>
                   <h2 className="text-xl font-semibold">Confirm Payment</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Complete the transaction to run your inference
-                  </p>
+                  <p className="text-sm text-muted-foreground">Complete the transaction to run your inference</p>
                 </div>
 
                 {isProcessing ? (
@@ -214,58 +238,19 @@ export default function RunInferencePage() {
                     <p className="text-sm text-muted-foreground">Please confirm in MetaMask</p>
                   </div>
                 ) : (
-                  <>
-                    <div className="rounded-xl border border-primary/40 bg-primary/5 p-6">
-                      <div className="text-center">
-                        <p className="text-sm text-muted-foreground">You will pay</p>
-                        <p className="text-4xl font-bold text-primary mt-2">
-                          {modelData.price + modelData.platformFee} MATIC
-                        </p>
-                        <p className="text-sm text-muted-foreground">~$0.061 USD</p>
-                      </div>
+                  <div className="rounded-xl border border-primary/40 bg-primary/5 p-6">
+                    <div className="text-center">
+                      <p className="text-sm text-muted-foreground">You will pay</p>
+                      <p className="text-4xl font-bold text-primary mt-2">{modelPrice + platformFee} MATIC</p>
                     </div>
-
-                    <div className="rounded-xl border border-chart-4/40 bg-chart-4/10 p-4">
-                      <div className="flex items-start gap-3">
-                        <AlertCircle className="h-5 w-5 text-chart-4 shrink-0 mt-0.5" />
-                        <div className="text-sm">
-                          <p className="font-medium text-chart-4">Escrow Protection</p>
-                          <p className="text-muted-foreground">
-                            Your payment will be held in escrow until the inference completes successfully. 
-                            If the job fails, you will receive a full refund.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-accent" />
-                        Payment secured by smart contract
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-accent" />
-                        Automatic refund on failure
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-accent" />
-                        Results delivered to your dashboard
-                      </div>
-                    </div>
-                  </>
+                  </div>
                 )}
               </div>
             )}
 
-            {/* Navigation Buttons */}
             {!isProcessing && (
               <div className="mt-8 flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={prevStep}
-                  disabled={currentStep === 1}
-                  className="border-border/60"
-                >
+                <Button variant="outline" onClick={prevStep} disabled={currentStep === 1} className="border-border/60">
                   Back
                 </Button>
                 {currentStep < 3 ? (
@@ -274,7 +259,7 @@ export default function RunInferencePage() {
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
                 ) : (
-                  <Button onClick={handleSubmit} className="bg-primary hover:bg-primary/90">
+                  <Button onClick={handleSubmit} className="bg-primary hover:bg-primary/90" disabled={!model}>
                     <Wallet className="mr-2 h-4 w-4" />
                     Confirm & Pay
                   </Button>

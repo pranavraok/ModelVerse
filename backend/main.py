@@ -554,6 +554,7 @@ def register_node(
         "id":                   new_id,
         "api_key":              api_key,
         "status":               "active",
+        "is_active":             True,   
         "node_name":            node_name,
         "reputation_score":     0.5,
         "total_jobs_completed": 0,
