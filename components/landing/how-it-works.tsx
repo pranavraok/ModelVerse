@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { Upload, Search, Play, CreditCard, X, Check, ArrowRight } from "lucide-react"
 import { motion, useScroll, useTransform } from "framer-motion"
 import { useRef } from "react"
@@ -254,7 +255,13 @@ export function HowItWorks() {
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
                   <Check className="h-6 w-6" />
                 </div>
-                <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">ModelVerse</h3>
+                <Image
+                  src="/logo.png"
+                  alt="ModelVerse"
+                  width={150}
+                  height={38}
+                  className="h-10 w-auto"
+                />
               </div>
               
               <ul className="space-y-6 flex-1 text-lg text-gray-200">

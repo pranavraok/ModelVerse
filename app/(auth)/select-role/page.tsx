@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Cpu, Upload, ShoppingCart, ArrowRight, Check } from "lucide-react"
@@ -74,11 +75,15 @@ export default function SelectRolePage() {
   return (
     <div className="w-full max-w-6xl z-10 relative">
       {/* Logo */}
-      <Link href="/" className="flex items-center justify-center gap-2 mb-8 drop-shadow-[0_0_15px_rgba(139,92,246,0.3)]">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/20 border border-primary/40 shadow-[0_0_30px_rgba(139,92,246,0.5)] transition-all duration-300 hover:scale-110 hover:shadow-[0_0_40px_rgba(139,92,246,0.8)]">
-          <Cpu className="h-6 w-6 text-primary animate-pulse drop-shadow-[0_0_10px_rgba(139,92,246,1)]" />
-        </div>
-        <span className="text-2xl font-semibold tracking-tight text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">ModelVerse</span>
+      <Link href="/" className="mb-8 flex items-center justify-center drop-shadow-[0_0_15px_rgba(139,92,246,0.3)]">
+        <Image
+          src="/logo.png"
+          alt="ModelVerse"
+          width={280}
+          height={76}
+          className="h-16 w-auto"
+          priority
+        />
       </Link>
 
       {/* Header */}
@@ -87,7 +92,7 @@ export default function SelectRolePage() {
           Choose your role
         </h1>
         <p className="mt-2 text-white/70">
-          Select how you want to use ModelVerse. You can change this later.
+          Select how you want to use the platform. You can change this later.
         </p>
       </div>
 
