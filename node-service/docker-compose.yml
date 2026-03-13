@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  node-daemon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: modelverse-node
+    restart: unless-stopped
+    environment:
+      # ── Required: set these in your shell or a .env.docker file ──────────
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - WALLET_ADDRESS=${WALLET_ADDRESS}
+      - BACKEND_HTTP_URL=${BACKEND_HTTP_URL:-http://host.docker.internal:8000}
+      # ── Optional ──────────────────────────────────────────────────────────
+      - NODE_PRIVATE_KEY=${NODE_PRIVATE_KEY:-}
+      - RPC_URL=${RPC_URL:-https://rpc-amoy.polygon.technology}
+      - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS:-5}
+      - HEARTBEAT_INTERVAL_SECONDS=${HEARTBEAT_INTERVAL_SECONDS:-30}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - model_cache:/app/models_cache
+      - node_logs:/app/logs
+    # host.docker.internal lets the container call your local FastAPI
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import os; open('/app/.env')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  model_cache:
+  node_logs:
