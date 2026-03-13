@@ -1,35 +1,89 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Cpu, Eye, EyeOff, ArrowRight } from "lucide-react"
+import { signupWithRole, type UserRole } from "@/lib/auth-api"
+
+const roleLabels: Record<UserRole, string> = {
+  creator: "Creator",
+  buyer: "Buyer",
+  "node-operator": "Node Operator",
+}
 
 export default function SignupPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: ""
   })
 
+  const selectedRole = useMemo(() => {
+    const role = searchParams.get("role")
+    if (role === "creator" || role === "buyer" || role === "node-operator") {
+      return role as UserRole
+    }
+    return null
+  }, [searchParams])
+
+  useEffect(() => {
+    if (!selectedRole) {
+      router.replace("/select-role")
+    }
+  }, [router, selectedRole])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!selectedRole) return
+
+    setErrorMessage("")
     setIsLoading(true)
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // Store user data temporarily (in real app, this would be server-side)
-    localStorage.setItem('pendingUser', JSON.stringify(formData))
-    
-    // Redirect to role selection
-    router.push('/select-role')
+
+    try {
+      await signupWithRole({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: selectedRole,
+      })
+
+      localStorage.setItem("pendingRole", selectedRole)
+      alert("Check your mail for the verification link.")
+      setTimeout(() => {
+        router.push(`/login?role=${selectedRole}`)
+      }, 5000)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Signup failed")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSocialSignup = (provider: "google" | "github") => {
+    if (!selectedRole) return
+
+    localStorage.setItem("pendingRole", selectedRole)
+
+    const redirectTo = `${window.location.origin}/login?role=${selectedRole}&provider=${provider}`
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+
+    if (supabaseUrl) {
+      const oauthUrl = `${supabaseUrl}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(redirectTo)}`
+      window.location.assign(oauthUrl)
+      return
+    }
+
+    // Fallback if public Supabase URL is not configured.
+    window.location.assign(`/login?role=${selectedRole}&provider=${provider}`)
   }
 
   return (
@@ -58,10 +112,10 @@ export default function SignupPage() {
             </div>
           </Link>
           <h2 className="mt-8 text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
-            Create an account
+            Create {selectedRole ? roleLabels[selectedRole] : ""} account
           </h2>
           <p className="mt-3 text-sm text-muted-foreground">
-            Join the decentralized AI economy
+            Join the decentralized AI economy as a {selectedRole ? roleLabels[selectedRole] : "new user"}
           </p>
         </div>
 
@@ -119,6 +173,12 @@ export default function SignupPage() {
               </p>
             </div>
 
+            {errorMessage && (
+              <p className="rounded-lg border border-red-400/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {errorMessage}
+              </p>
+            )}
+
             <Button 
               type="submit" 
               className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all hover:shadow-[0_0_25px_rgba(139,92,246,0.5)] font-medium text-lg mt-4"
@@ -146,7 +206,12 @@ export default function SignupPage() {
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-4">
-              <Button variant="outline" className="h-12 rounded-xl border-border/50 bg-background/30 hover:bg-background/50 hover:border-border/80 transition-all">
+              <Button
+                type="button"
+                onClick={() => handleSocialSignup("google")}
+                variant="outline"
+                className="h-12 rounded-xl border-border/50 bg-background/30 hover:bg-background/50 hover:border-border/80 transition-all"
+              >
                 <svg className="mr-2 h-4 w-4 text-foreground/80" viewBox="0 0 24 24">
                   <path
                     fill="currentColor"
@@ -167,7 +232,12 @@ export default function SignupPage() {
                 </svg>
                 Google
               </Button>
-              <Button variant="outline" className="h-12 rounded-xl border-border/50 bg-background/30 hover:bg-background/50 hover:border-border/80 transition-all">
+              <Button
+                type="button"
+                onClick={() => handleSocialSignup("github")}
+                variant="outline"
+                className="h-12 rounded-xl border-border/50 bg-background/30 hover:bg-background/50 hover:border-border/80 transition-all"
+              >
                 <svg className="mr-2 h-4 w-4 text-foreground/80" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                 </svg>

@@ -1,40 +1,107 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Cpu, Eye, EyeOff, ArrowRight } from "lucide-react"
+import {
+  loginWithPassword,
+  roleToDashboardPath,
+  selectUserRole,
+  type UserRole,
+} from "@/lib/auth-api"
+
+const roleLabels: Record<UserRole, string> = {
+  creator: "Creator",
+  buyer: "Buyer",
+  "node-operator": "Node Operator",
+}
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [selectedRole, setSelectedRole] = useState<UserRole>("creator")
+  const [errorMessage, setErrorMessage] = useState("")
   const [formData, setFormData] = useState({
     email: "",
     password: ""
   })
 
+  const roleFromQuery = useMemo(() => {
+    const role = searchParams.get("role")
+    if (role === "creator" || role === "buyer" || role === "node-operator") {
+      return role as UserRole
+    }
+    return null
+  }, [searchParams])
+
+  useEffect(() => {
+    const pendingRole = localStorage.getItem("pendingRole")
+    if (roleFromQuery) {
+      setSelectedRole(roleFromQuery)
+      return
+    }
+
+    if (pendingRole === "creator" || pendingRole === "buyer" || pendingRole === "node-operator") {
+      setSelectedRole(pendingRole)
+    }
+  }, [roleFromQuery])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMessage("")
     setIsLoading(true)
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // Check for demo accounts
-    const role = localStorage.getItem('userRole')
-    if (role === 'creator') {
-      router.push('/creator')
-    } else if (role === 'buyer') {
-      router.push('/buyer')
-    } else {
-      // Default redirect to creator dashboard for demo
-      localStorage.setItem('userRole', 'creator')
-      router.push('/creator')
+
+    try {
+      const loginResponse = await loginWithPassword({
+        email: formData.email,
+        password: formData.password,
+      })
+
+      const accessToken = loginResponse.access_token
+      if (!accessToken) {
+        throw new Error("Login succeeded but no access token was returned")
+      }
+
+      const apiRole = loginResponse.user?.role ?? loginResponse.role
+      let effectiveRole = selectedRole
+
+      if (apiRole === "creator" || apiRole === "buyer" || apiRole === "node-operator") {
+        effectiveRole = apiRole
+      } else {
+        await selectUserRole({ role: selectedRole, accessToken })
+      }
+
+      localStorage.setItem("accessToken", accessToken)
+      localStorage.setItem("userRole", effectiveRole)
+      localStorage.removeItem("pendingRole")
+
+      router.push(roleToDashboardPath(effectiveRole))
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Login failed")
+    } finally {
+      setIsLoading(false)
     }
+  }
+
+  const handleSocialLogin = (provider: "google" | "github") => {
+    localStorage.setItem("pendingRole", selectedRole)
+
+    const redirectTo = `${window.location.origin}/login?role=${selectedRole}&provider=${provider}`
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+
+    if (supabaseUrl) {
+      const oauthUrl = `${supabaseUrl}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(redirectTo)}`
+      window.location.assign(oauthUrl)
+      return
+    }
+
+    window.location.assign(`/login?role=${selectedRole}&provider=${provider}`)
   }
 
   return (
@@ -72,6 +139,22 @@ export default function LoginPage() {
 
         <div className="relative rounded-3xl border border-border/50 bg-card/40 px-8 py-10 shadow-2xl backdrop-blur-xl">
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="role" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Role</Label>
+              <select
+                id="role"
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value as UserRole)}
+                className="h-12 w-full rounded-xl border border-border/50 bg-background/50 px-3 text-sm focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                {Object.entries(roleLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email" className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Email address</Label>
               <Input
@@ -112,6 +195,12 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {errorMessage && (
+              <p className="rounded-lg border border-red-400/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {errorMessage}
+              </p>
+            )}
+
             <Button 
               type="submit" 
               className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all hover:shadow-[0_0_25px_rgba(139,92,246,0.5)] font-medium text-lg mt-4"
@@ -139,7 +228,12 @@ export default function LoginPage() {
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-4">
-              <Button variant="outline" className="h-12 rounded-xl border-border/50 bg-background/30 hover:bg-background/50 hover:border-border/80 transition-all">
+              <Button
+                type="button"
+                onClick={() => handleSocialLogin("google")}
+                variant="outline"
+                className="h-12 rounded-xl border-border/50 bg-background/30 hover:bg-background/50 hover:border-border/80 transition-all"
+              >
                 <svg className="mr-2 h-4 w-4 text-foreground/80" viewBox="0 0 24 24">
                   <path
                     fill="currentColor"
@@ -160,7 +254,12 @@ export default function LoginPage() {
                 </svg>
                 Google
               </Button>
-              <Button variant="outline" className="h-12 rounded-xl border-border/50 bg-background/30 hover:bg-background/50 hover:border-border/80 transition-all">
+              <Button
+                type="button"
+                onClick={() => handleSocialLogin("github")}
+                variant="outline"
+                className="h-12 rounded-xl border-border/50 bg-background/30 hover:bg-background/50 hover:border-border/80 transition-all"
+              >
                 <svg className="mr-2 h-4 w-4 text-foreground/80" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                 </svg>

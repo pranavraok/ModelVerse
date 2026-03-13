@@ -58,7 +58,8 @@ export function DashboardSidebar({ role }: SidebarProps) {
 
   const handleLogout = () => {
     localStorage.removeItem('userRole')
-    localStorage.removeItem('pendingUser')
+    localStorage.removeItem('pendingRole')
+    localStorage.removeItem('accessToken')
     router.push('/')
   }
 

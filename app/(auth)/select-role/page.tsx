@@ -61,20 +61,10 @@ export default function SelectRolePage() {
     
     setIsLoading(true)
     
-    // Save role to localStorage (in real app, this would be server-side)
-    localStorage.setItem('userRole', selectedRole)
+    // Keep selected role for signup/login prefill.
+    localStorage.setItem('pendingRole', selectedRole)
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    // Redirect based on role
-    if (selectedRole === 'creator') {
-      router.push('/creator')
-    } else if (selectedRole === 'buyer') {
-      router.push('/buyer')
-    } else {
-      router.push('/node-operator')
-    }
+    router.push(`/signup?role=${selectedRole}`)
   }
 
   return (
