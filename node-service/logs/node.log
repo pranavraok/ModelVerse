@@ -1,0 +1,94 @@
+2026-03-13T12:40:54 [INFO] healthcheck – Running pre-flight healthcheck …
+2026-03-13T12:40:54 [INFO] healthcheck – [healthcheck] OK   – RPC_URL: https://polygon-amoy.g.alchemy.com/v2/YOUR_ALCHEMY_KEY_HERE
+2026-03-13T12:40:54 [INFO] healthcheck – [healthcheck] OK   – NODE_PRIVATE_KEY length correct (64 chars).
+2026-03-13T12:40:54 [INFO] healthcheck – [healthcheck] OK   – MODEL_CACHE_DIR: D:\4th sem\ModelVerse\node-service\models_cache
+2026-03-13T12:40:54 [INFO] healthcheck – [healthcheck] OK   – MODEL_CACHE_DIR is writable.
+2026-03-13T12:40:54 [INFO] healthcheck – Pre-flight healthcheck PASSED ✔
+2026-03-13T12:41:13 [INFO] __main__ – ━━━━━━━━━━━━━━━━━━  ModelVerse Node Daemon  ━━━━━━━━━━━━━━━━━━
+2026-03-13T12:41:13 [INFO] __main__ – Model cache dir  : ./models_cache
+2026-03-13T12:41:13 [INFO] __main__ – RPC URL          : https://polygon-amoy.g.alchemy.com/v2/YOUR_ALCHEMY_KEY_HERE
+2026-03-13T12:41:13 [INFO] __main__ – JobManager       : 0x0000000000000000000000000000000000000000
+2026-03-13T12:41:13 [INFO] __main__ – ModelRegistry    : 0x0000000000000000000000000000000000000000
+2026-03-13T12:41:13 [INFO] __main__ – StakeRegistry    : 0x0000000000000000000000000000000000000000
+2026-03-13T12:41:13 [INFO] __main__ – Coordinator WS   : wss://your-backend.example.com/ws/jobs
+2026-03-13T12:41:13 [INFO] __main__ – Max concurrent   : 3
+2026-03-13T12:41:13 [INFO] __main__ – Preferred models : ['credit_scoring', 'image_classification', 'tabular_regression']
+2026-03-13T12:41:13 [INFO] __main__ – ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2026-03-13T12:41:13 [INFO] healthcheck – Running pre-flight healthcheck …
+2026-03-13T12:41:13 [INFO] healthcheck – [healthcheck] OK   – RPC_URL: https://polygon-amoy.g.alchemy.com/v2/YOUR_ALCHEMY_KEY_HERE
+2026-03-13T12:41:13 [INFO] healthcheck – [healthcheck] OK   – NODE_PRIVATE_KEY length correct (64 chars).
+2026-03-13T12:41:13 [INFO] healthcheck – [healthcheck] OK   – MODEL_CACHE_DIR: D:\4th sem\ModelVerse\node-service\models_cache
+2026-03-13T12:41:13 [INFO] healthcheck – [healthcheck] OK   – MODEL_CACHE_DIR is writable.
+2026-03-13T12:41:13 [INFO] healthcheck – Pre-flight healthcheck PASSED ✔
+2026-03-13T12:41:13 [INFO] __main__ – Entering heartbeat loop (interval: 30 seconds) …
+2026-03-13T12:41:41 [INFO] inference_engine – InferenceEngine ready – max_sessions=3
+2026-03-13T12:41:41 [INFO] inference_engine – Loading ONNX session – cid=QmDummy001 path=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_returns_output_dict0\QmDummy001.onnx
+2026-03-13T12:41:41 [INFO] inference_engine – ONNX session loaded – cid=QmDummy001
+2026-03-13T12:41:41 [INFO] inference_engine – Inference START – cid=QmDummy001 inputs=['input_0']
+2026-03-13T12:41:41 [INFO] inference_engine – Inference END – cid=QmDummy001 latency=0.02 ms outputs=[<MagicMock name='output_0.name' id='1921470109008'>]
+2026-03-13T12:41:41 [INFO] inference_engine – InferenceEngine ready – max_sessions=3
+2026-03-13T12:41:41 [INFO] inference_engine – Loading ONNX session – cid=QmDummy002 path=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_cache_get_or_fetch_called0\QmDummy002.onnx
+2026-03-13T12:41:41 [INFO] inference_engine – ONNX session loaded – cid=QmDummy002
+2026-03-13T12:41:41 [INFO] inference_engine – Inference START – cid=QmDummy002 inputs=[]
+2026-03-13T12:41:41 [INFO] inference_engine – Inference END – cid=QmDummy002 latency=0.01 ms outputs=[<MagicMock name='output_0.name' id='1921470107664'>]
+2026-03-13T12:41:41 [INFO] inference_engine – InferenceEngine ready – max_sessions=3
+2026-03-13T12:41:41 [INFO] inference_engine – Loading ONNX session – cid=QmSession001 path=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_second_call_reuses_sessio0\QmSession001.onnx
+2026-03-13T12:41:41 [INFO] inference_engine – ONNX session loaded – cid=QmSession001
+2026-03-13T12:41:41 [INFO] inference_engine – InferenceEngine ready – max_sessions=3
+2026-03-13T12:41:41 [INFO] inference_engine – Loading ONNX session – cid=QmSession002 path=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_session_cache_hit_skips_g0\QmSession002.onnx
+2026-03-13T12:41:41 [INFO] inference_engine – ONNX session loaded – cid=QmSession002
+2026-03-13T12:41:41 [INFO] inference_engine – InferenceEngine ready – max_sessions=1
+2026-03-13T12:41:41 [INFO] inference_engine – Loading ONNX session – cid=QmLRU_A path=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_lru_evicts_oldest_session0\QmLRU_A.onnx
+2026-03-13T12:41:41 [INFO] inference_engine – ONNX session loaded – cid=QmLRU_A
+2026-03-13T12:41:41 [INFO] inference_engine – Loading ONNX session – cid=QmLRU_B path=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_lru_evicts_oldest_session0\QmLRU_B.onnx
+2026-03-13T12:41:41 [INFO] inference_engine – ONNX session loaded – cid=QmLRU_B
+2026-03-13T12:41:41 [INFO] inference_engine – Session cache evicted – cid=QmLRU_A
+2026-03-13T12:41:41 [INFO] inference_engine – InferenceEngine ready – max_sessions=3
+2026-03-13T12:41:41 [INFO] inference_engine – Loading ONNX session – cid=QmBadModel path=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_model_load_error_on_bad_o0\QmBadModel.onnx
+2026-03-13T12:41:41 [ERROR] inference_engine – Failed to load ONNX model cid=QmBadModel: Corrupt ONNX graph
+2026-03-13T12:41:41 [INFO] inference_engine – InferenceEngine ready – max_sessions=3
+2026-03-13T12:41:41 [INFO] inference_engine – Loading ONNX session – cid=QmRunFail path=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_inference_error_on_run_fa0\QmRunFail.onnx
+2026-03-13T12:41:41 [INFO] inference_engine – ONNX session loaded – cid=QmRunFail
+2026-03-13T12:41:41 [INFO] inference_engine – Inference START – cid=QmRunFail inputs=['x']
+2026-03-13T12:41:41 [ERROR] inference_engine – Inference FAILED – cid=QmRunFail: shape mismatch
+2026-03-13T12:41:41 [INFO] model_cache – ModelCache initialised – dir=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_get_or_fetch_creates_file0\mc budget=500 MiB
+2026-03-13T12:41:41 [INFO] model_cache – Cache scan complete – 0 model(s), 0.00 MiB used
+2026-03-13T12:41:41 [INFO] model_cache – Cache MISS – fetching cid=QmTestModel001
+2026-03-13T12:41:41 [INFO] model_cache – Cached model cid=QmTestModel001 size=0.00 MiB → C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_get_or_fetch_creates_file0\mc\QmTestModel001.onnx
+2026-03-13T12:41:41 [INFO] model_cache – ModelCache initialised – dir=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_second_call_does_not_invo0\mc budget=500 MiB
+2026-03-13T12:41:41 [INFO] model_cache – Cache scan complete – 0 model(s), 0.00 MiB used
+2026-03-13T12:41:41 [INFO] model_cache – Cache MISS – fetching cid=QmTestModel002
+2026-03-13T12:41:41 [INFO] model_cache – Cached model cid=QmTestModel002 size=0.00 MiB → C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_second_call_does_not_invo0\mc\QmTestModel002.onnx
+2026-03-13T12:41:41 [INFO] model_cache – ModelCache initialised – dir=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_current_size_grows_after_0\mc budget=500 MiB
+2026-03-13T12:41:41 [INFO] model_cache – Cache scan complete – 0 model(s), 0.00 MiB used
+2026-03-13T12:41:41 [INFO] model_cache – Cache MISS – fetching cid=QmA
+2026-03-13T12:41:41 [INFO] model_cache – Cached model cid=QmA size=0.00 MiB → C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_current_size_grows_after_0\mc\QmA.onnx
+2026-03-13T12:41:41 [INFO] model_cache – Cache MISS – fetching cid=QmB
+2026-03-13T12:41:41 [INFO] model_cache – Cached model cid=QmB size=0.00 MiB → C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_current_size_grows_after_0\mc\QmB.onnx
+2026-03-13T12:41:41 [INFO] model_cache – ModelCache initialised – dir=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_touch_advances_last_acces0\mc budget=500 MiB
+2026-03-13T12:41:41 [INFO] model_cache – Cache scan complete – 0 model(s), 0.00 MiB used
+2026-03-13T12:41:41 [INFO] model_cache – Cache MISS – fetching cid=QmTouch001
+2026-03-13T12:41:41 [INFO] model_cache – Cached model cid=QmTouch001 size=0.00 MiB → C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_touch_advances_last_acces0\mc\QmTouch001.onnx
+2026-03-13T12:41:41 [INFO] model_cache – ModelCache initialised – dir=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_touch_unknown_cid_is_safe0\mc budget=500 MiB
+2026-03-13T12:41:41 [INFO] model_cache – Cache scan complete – 0 model(s), 0.00 MiB used
+2026-03-13T12:41:41 [INFO] model_cache – ModelCache initialised – dir=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_eviction_removes_oldest_e0\evict budget=1 MiB
+2026-03-13T12:41:41 [INFO] model_cache – Cache scan complete – 0 model(s), 0.00 MiB used
+2026-03-13T12:41:41 [INFO] model_cache – Cache MISS – fetching cid=QmFirst
+2026-03-13T12:41:41 [INFO] model_cache – Cached model cid=QmFirst size=0.59 MiB → C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_eviction_removes_oldest_e0\evict\QmFirst.onnx
+2026-03-13T12:41:41 [INFO] model_cache – Cache MISS – fetching cid=QmSecond
+2026-03-13T12:41:41 [INFO] model_cache – Cached model cid=QmSecond size=0.59 MiB → C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_eviction_removes_oldest_e0\evict\QmSecond.onnx
+2026-03-13T12:41:41 [INFO] model_cache – Evicting cid=QmFirst (0.59 MiB) to meet budget.
+2026-03-13T12:41:41 [INFO] model_cache – ModelCache initialised – dir=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_current_size_after_evicti0\sz budget=1 MiB
+2026-03-13T12:41:41 [INFO] model_cache – Cache scan complete – 0 model(s), 0.00 MiB used
+2026-03-13T12:41:41 [INFO] model_cache – Cache MISS – fetching cid=QmC
+2026-03-13T12:41:41 [INFO] model_cache – Cached model cid=QmC size=0.59 MiB → C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_current_size_after_evicti0\sz\QmC.onnx
+2026-03-13T12:41:41 [INFO] model_cache – Cache MISS – fetching cid=QmD
+2026-03-13T12:41:41 [INFO] model_cache – Cached model cid=QmD size=0.59 MiB → C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_current_size_after_evicti0\sz\QmD.onnx
+2026-03-13T12:41:41 [INFO] model_cache – Evicting cid=QmC (0.59 MiB) to meet budget.
+2026-03-13T12:41:41 [INFO] model_cache – ModelCache initialised – dir=C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_deleted_file_triggers_re_0\mc budget=500 MiB
+2026-03-13T12:41:41 [INFO] model_cache – Cache scan complete – 0 model(s), 0.00 MiB used
+2026-03-13T12:41:41 [INFO] model_cache – Cache MISS – fetching cid=QmStale001
+2026-03-13T12:41:41 [INFO] model_cache – Cached model cid=QmStale001 size=0.00 MiB → C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_deleted_file_triggers_re_0\mc\QmStale001.onnx
+2026-03-13T12:41:41 [WARNING] model_cache – Stale cache entry for cid=QmStale001 – will re-fetch.
+2026-03-13T12:41:41 [INFO] model_cache – Cache MISS – fetching cid=QmStale001
+2026-03-13T12:41:41 [INFO] model_cache – Cached model cid=QmStale001 size=0.00 MiB → C:\Users\ASUS\AppData\Local\Temp\pytest-of-ASUS\pytest-0\test_deleted_file_triggers_re_0\mc\QmStale001.onnx
