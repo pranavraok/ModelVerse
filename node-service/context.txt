@@ -1,0 +1,1017 @@
+Authors: Tushar P & Team Member
+Project: Edge AI Credit Scoring / ModelVerse Platform
+Timeline: Hackathon (24-72 hours)
+Date: March 2026
+This document provides a complete implementation guide for
+building a permissionless multi-node system where external
+operators run AI model inference jobs on their laptops/servers,
+earning cryptocurrency rewards through Polygon testnet smart
+contracts. The system enables creators to upload models, buyers to
+request inference jobs, and nodes to compete for computation tasks
+in a decentralized marketplace.
+Core Architecture: 3 dashboards (Creator, Buyer, Node) + Node
+daemon software + Supabase backend + Polygon smart contracts +
+TensorFlow Lite edge inference.
+The multi-node system creates a decentralized AI inference
+marketplace where:
+Multi-Node System
+Implementation Guide
+Decentralized AI Model Inference Platform
+Executive Summary
+System Description
+Overview
+Creators upload AI models (credit scoring, image recognition,
+voice analysis) to IPFS and register them on-chain
+•
+Buyers browse models, submit paid inference jobs with input
+data
+•
+Permissionless Registration: Anyone with a laptop and wallet can
+become a node operator by staking minimal MATIC tokens and
+running open-source node software[cite:82].
+Trustless Verification: Results submitted as SHA-256 hashes to
+blockchain, enabling buyers to verify correctness without trusting
+centralized servers[cite:79].
+Edge AI Execution: Models run locally on nodes using TensorFlow
+Lite/ONNX Runtime, preserving data privacy and reducing latency to
+<500ms[file:33].
+Automated Payments: Solidity smart contracts handle escrow,
+verification, and instant multi-party settlements without
+intermediaries[cite:86].
+Component Technology Purpose
+Node
+Software
+Python + Docker
+Daemon for job polling
+& inference
+Model
+Runtime
+TFLite, ONNX Edge AI execution
+Backend Supabase (PostGIS)
+Node registry, job
+queue
+Blockchain
+Polygon Mumbai
+Testnet
+Payment & verification
+Storage
+IPFS
+(Pinata/web3.storage)
+Model & data storage
+Frontend React + Ethers.js 3 dashboards
+Node Operators run dedicated software on their machines,
+compete for jobs, execute models locally, and submit
+cryptographic proofs of results
+•
+Smart Contracts verify results, automatically split payments
+(60% node, 20% creator, 20% protocol), and maintain reputation
+scores
+•
+Key Features
+Technical Components
+Table 1: System architecture components
+1. Node operator visits Node Dashboard at
+https://yourapp.com/node
+2. Clicks "Register as Node" → MetaMask wallet connection popup
+3. System prompts stake of 10 MATIC (testnet) as security deposit
+4. Operator confirms transaction → smart contract
+registerNode(address, stake) executes
+5. Backend assigns unique node_id and generates API key
+6. Dashboard displays: "Node XYZ registered. Download software
+below."
+7. Operator downloads node-software.zip containing Dockerized
+daemon
+Smart Contract Event:
+event NodeRegistered(address indexed nodeAddress, uint256 stake,
+uint256 timestamp);
+1. Operator extracts zip: node-software/
+2. Edits .env file with credentials:
+NODE_ID=abc123
+API_KEY=your_api_key_from_dashboard
+WALLET_PRIVATE_KEY=0x...
+SUPABASE_URL=https://xyz.supabase.co
+RPC_URL=https://polygon-mumbai.g.alchemy.com/v2/YOUR_KEY
+3. Runs setup: docker-compose up -d
+4. Node daemon starts, logs: "Node abc123 online. Polling for
+jobs..."
+5. Daemon connects to Supabase job queue, listens for new
+inference requests
+Node Software Architecture:
+Complete Workflow
+Phase 1: Node Registration
+Phase 2: Node Software Setup
+node-software/
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── node_daemon.py # Main polling loop
+├── inference_engine.py # TFLite/ONNX executor
+├── blockchain_client.py # Web3.py contract interaction
+├── models/ # Downloaded .tflite files
+└── .env
+1. Buyer logs into Buyer Dashboard
+2. Browses model marketplace, selects "Credit Scoring Model v2"
+3. Clicks "Run Inference" → uploads input JSON:
+{
+"upi_transactions": [...],
+"voice_clip_url": "ipfs://Qm...",
+"graph_data": {...}
+}
+4. Sets payment: 5 MATIC, clicks "Submit Job"
+5. Frontend calls smart contract createJob(modelId,
+paymentAmount, inputHash)
+6. Contract locks 5 MATIC in escrow, emits JobCreated event
+7. All online nodes' daemons detect event via polling Supabase jobs
+table
+Job Table Schema (Supabase):
+Phase 3: Job Creation and Broadcasting
+Column Type Description
+job_id UUID Unique identifier
+model_id UUID Reference to model
+buyer_address TEXT Wallet address
+input_data_url TEXT IPFS link to inputs
+payment_amount NUMERIC MATIC locked
+status ENUM pending/assigned/completed
+assigned_node_id TEXT Winner node
+result_hash TEXT SHA-256 of output
+created_at TIMESTAMP Job timestamp
+Table 2: Jobs table structure
+1. Multiple nodes (abc123, xyz789, def456) detect new job
+simultaneously
+2. Each node checks: "Do I have this model cached? Is my CPU
+free?"
+3. Nodes submit bids to backend: POST /api/jobs/{job_id}/bid
+{
+"node_id": "abc123",
+"estimated_time_ms": 450,
+"reputation_score": 0.95
+}
+4. Backend selection algorithm (reputation-weighted fastest bid):
+def select_node(bids):
+scores = [(bid.reputation * 0.7 + (1000/bid.time) * 0.3, bid.node_id)
+for bid in bids]
+winner = max(scores, key=lambda x: x[0])
+return winner[1]
+5. Winner node (abc123) receives assignment: job_id,
+input_data_url, model_path
+6. Other nodes return to polling state
+Phase 4: Job Competition and Assignment
+Node abc123 executes inference pipeline:
+1. Downloads input data: curl https://ipfs.io/ipfs/Qm... > input.json
+2. Loads TFLite model from cache: models/credit_scoring_v2.tflite
+3. Preprocesses inputs (normalize UPI txns, extract voice features
+via Whisper)
+4. Runs inference:
+import tflite_runtime.interpreter as tflite
+import time, hashlib, json
+interpreter = tflite.Interpreter(model_path="models/credit_v2.tflite")
+interpreter.allocate_tensors()
+input_data = preprocess(input_json) # shape: (1, 128)
+interpreter.set_tensor(0, input_data)
+start = time.time()
+interpreter.invoke()
+latency = time.time() - start # Must be <500ms
+output = interpreter.get_tensor(0)[0] # e.g., [0.82] = credit score
+result = {"score": float(output), "latency_ms": latency * 1000}
+result_json = json.dumps(result, sort_keys=True)
+result_hash = hashlib.sha256(result_json.encode()).hexdigest()
+5. Uploads full result to IPFS: result_url = upload_to_ipfs(result)
+Phase 5: Model Execution
+Load preprocessed features
+Timed execution
+Extract result
+Compute hash for verification
+6. Submits hash + URL to smart contract
+1. Node calls contract function: submitResult(jobId, resultHash,
+resultUrl)
+2. Contract verifies:
+3. Contract emits ResultSubmitted event
+4. Buyer's dashboard auto-updates: "Result ready. Verify?"
+5. Buyer downloads result from IPFS, recomputes hash locally
+6. If hash matches: Buyer calls approveResult(jobId) or automatic
+after 10 min timeout
+7. Contract executes payment split:
+function splitPayment(uint256 jobId) internal {
+Job storage job = jobs[jobId];
+uint256 nodeShare = job.payment * 60 / 100; // 60%
+uint256 creatorShare = job.payment * 20 / 100; // 20%
+uint256 protocolShare = job.payment * 20 / 100; // 20%
+payable(job.assignedNode).transfer(nodeShare);
+payable(models[job.modelId].creator).transfer(creatorShare);
+payable(protocolWallet).transfer(protocolShare);
+emit PaymentSplit(jobId, nodeShare, creatorShare, protocolShare);
+}
+8. Node wallet receives 3 MATIC instantly
+9. Node reputation score increases: UPDATE nodes SET reputation
+= reputation + 0.01
+10. Job marked complete in Supabase
+Phase 6: Result Verification and Payment
+• Job exists and status is "assigned"
+• Caller is the assigned node
+• Result submitted within timeout (5 minutes)
+Node Timeout: If node doesn't submit within 5 minutes:
+Incorrect Result: If buyer disputes (hash mismatch):
+File: contracts/ModelMarketplace.sol
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+contract ModelMarketplace {
+struct Node {
+address nodeAddress;
+uint256 stake;
+uint256 reputation; // 0-1000 scale
+bool isActive;
+}
+Failure Scenarios
+• Contract slashes 10% of node's stake
+• Job reassigned to next-best bidder
+• Original node reputation decreases by 0.05
+• Enters arbitration (MVP: admin review)
+• Future: Optimistic rollup challenge system
+• Proven fraud → full stake slashed
+Implementation Steps
+Prerequisites
+• 3-4 developers (2 on multi-node system)
+• Laptops with Docker installed
+MetaMask wallets with Mumbai testnet MATIC (faucet:
+https://mumbaifaucet.com)
+•
+• Alchemy/Infura RPC endpoint for Polygon Mumbai
+• Supabase project created
+• GitHub repo initialized
+Step 1: Smart Contract Development (Hours 0-4)
+struct Job {
+uint256 jobId;
+address buyer;
+uint256 modelId;
+uint256 payment;
+address assignedNode;
+bytes32 resultHash;
+string resultUrl;
+JobStatus status;
+uint256 createdAt;
+}
+enum JobStatus { Pending, Assigned, Completed, Disputed }
+mapping(address => Node) public nodes;
+mapping(uint256 => Job) public jobs;
+uint256 public jobCounter;
+uint256 public constant MIN_STAKE = 10 ether; // 10 MATIC
+event NodeRegistered(address indexed node, uint256 stake);
+event JobCreated(uint256 indexed jobId, uint256 modelId, uint256 payment);
+event JobAssigned(uint256 indexed jobId, address node);
+event ResultSubmitted(uint256 indexed jobId, bytes32 resultHash);
+event PaymentSplit(uint256 indexed jobId, uint256 nodeShare, uint256 creat
+function registerNode() external payable {
+require(msg.value >= MIN_STAKE, "Insufficient stake");
+require(!nodes[msg.sender].isActive, "Already registered");
+nodes[msg.sender] = Node({
+nodeAddress: msg.sender,
+stake: msg.value,
+reputation: 500, // Start at 50%
+isActive: true
+});
+emit NodeRegistered(msg.sender, msg.value);
+}
+function createJob(uint256 _modelId, bytes32 _inputHash) external payable {
+require(msg.value > 0, "Payment required");
+jobCounter++;
+jobs[jobCounter] = Job({
+jobId: jobCounter,
+buyer: msg.sender,
+modelId: _modelId,
+payment: msg.value,
+assignedNode: address(0),
+resultHash: bytes32(0),
+resultUrl: "",
+status: JobStatus.Pending,
+createdAt: block.timestamp
+});
+emit JobCreated(jobCounter, _modelId, msg.value);
+}
+function assignJob(uint256 _jobId, address _node) external {
+// In production: only backend can call this (via Chainlink oracle or similar
+// For hackathon: public function with basic checks
+Job storage job = jobs[_jobId];
+require(job.status == JobStatus.Pending, "Job not pending");
+require(nodes[_node].isActive, "Invalid node");
+job.assignedNode = _node;
+job.status = JobStatus.Assigned;
+emit JobAssigned(_jobId, _node);
+}
+function submitResult(uint256 _jobId, bytes32 _resultHash, string memory _r
+Job storage job = jobs[_jobId];
+require(job.assignedNode == msg.sender, "Not assigned to you");
+require(job.status == JobStatus.Assigned, "Invalid status");
+require(block.timestamp - job.createdAt < 300, "Timeout exceeded"); // 5 m
+job.resultHash = _resultHash;
+job.resultUrl = _resultUrl;
+job.status = JobStatus.Completed;
+// Auto-approve and split payment (simplified for hackathon)
+_splitPayment(_jobId);
+emit ResultSubmitted(_jobId, _resultHash);
+}
+function _splitPayment(uint256 _jobId) internal {
+Job storage job = jobs[_jobId];
+uint256 nodeShare = (job.payment * 60) / 100;
+uint256 creatorShare = (job.payment * 20) / 100;
+uint256 protocolShare = job.payment - nodeShare - creatorShare;
+payable(job.assignedNode).transfer(nodeShare);
+// creatorShare sent to model creator (fetch from models mapping)
+// protocolShare sent to protocol wallet
+// Update node reputation
+nodes[job.assignedNode].reputation += 10;
+emit PaymentSplit(_jobId, nodeShare, creatorShare);
+}
+}
+Deployment Steps:
+1. Install Hardhat: npm install --save-dev hardhat
+2. Create deployment script: scripts/deploy.js
+3. Deploy: npx hardhat run scripts/deploy.js --network mumbai
+4. Save contract address: 0xYourContractAddress
+5. Verify on PolygonScan: npx hardhat verify --network mumbai
+0xYour...
+Database Schema (SQL):
+-- Nodes table
+CREATE TABLE nodes (
+node_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+wallet_address TEXT UNIQUE NOT NULL,
+api_key TEXT UNIQUE NOT NULL,
+stake_amount NUMERIC DEFAULT 10,
+reputation_score NUMERIC DEFAULT 0.5,
+total_jobs_completed INTEGER DEFAULT 0,
+is_active BOOLEAN DEFAULT true,
+last_seen TIMESTAMP DEFAULT NOW(),
+created_at TIMESTAMP DEFAULT NOW()
+);
+-- Jobs table
+CREATE TABLE jobs (
+job_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+blockchain_job_id INTEGER, -- Links to smart contract
+model_id UUID NOT NULL,
+buyer_address TEXT NOT NULL,
+input_data_url TEXT NOT NULL,
+input_hash TEXT NOT NULL,
+payment_amount NUMERIC NOT NULL,
+status TEXT DEFAULT 'pending', -- pending/assigned/completed/failed
+assigned_node_id UUID REFERENCES nodes(node_id),
+result_hash TEXT,
+result_url TEXT,
+execution_time_ms INTEGER,
+created_at TIMESTAMP DEFAULT NOW(),
+completed_at TIMESTAMP
+);
+-- Job bids (for assignment algorithm)
+CREATE TABLE job_bids (
+bid_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+job_id UUID REFERENCES jobs(job_id),
+node_id UUID REFERENCES nodes(node_id),
+Step 2: Supabase Backend Setup (Hours 4-6)
+estimated_time_ms INTEGER NOT NULL,
+bid_timestamp TIMESTAMP DEFAULT NOW(),
+UNIQUE(job_id, node_id)
+);
+-- Indexes for performance
+CREATE INDEX idx_jobs_status ON jobs(status);
+CREATE INDEX idx_jobs_created ON jobs(created_at DESC);
+CREATE INDEX idx_nodes_active ON nodes(is_active,
+reputation_score DESC);
+API Endpoints (Supabase Edge Functions or separate Express.js):
+Endpoint Method Purpose
+/api/nodes/register POST Register node wallet
+/api/nodes/{id}/heartbeat POST Update last_seen
+/api/jobs/pending GET Poll for new jobs
+/api/jobs/{id}/bid POST Submit job bid
+/api/jobs/{id}/result POST Upload result metadata
+Table 3: Backend API endpoints
+Core Daemon (node_daemon.py):
+import os, time, requests, json, hashlib
+from web3 import Web3
+from dotenv import load_dotenv
+import tflite_runtime.interpreter as tflite
+load_dotenv()
+NODE_ID = os.getenv("NODE_ID")
+API_KEY = os.getenv("API_KEY")
+BACKEND_URL = os.getenv("SUPABASE_URL")
+WALLET_KEY = os.getenv("WALLET_PRIVATE_KEY")
+CONTRACT_ADDRESS = os.getenv("CONTRACT_ADDRESS")
+RPC_URL = os.getenv("RPC_URL")
+Step 3: Node Software Development (Hours 6-12)
+w3 = Web3(Web3.HTTPProvider(RPC_URL))
+account = w3.eth.account.from_key(WALLET_KEY)
+def poll_jobs():
+"""Poll Supabase for pending jobs"""
+headers = {"apikey": API_KEY, "Authorization": f"Bearer {API_KEY}"}
+response = requests.get(
+f"{BACKEND_URL}/rest/v1/jobs?
+status=eq.pending&order=created_at.desc&limit=10",
+headers=headers
+)
+return response.json()
+def submit_bid(job_id, estimated_time):
+"""Submit bid to backend"""
+headers = {"apikey": API_KEY, "Content-Type": "application/json"}
+bid_data = {
+"job_id": job_id,
+"node_id": NODE_ID,
+"estimated_time_ms": estimated_time
+}
+response = requests.post(
+f"{BACKEND_URL}/rest/v1/job_bids",
+headers=headers,
+json=bid_data
+)
+return response.status_code == 201
+def execute_inference(job):
+"""Run TFLite model on job input"""
+# Download input data
+input_data = requests.get(job["input_data_url"]).json()
+# Load model
+model_path = f"models/{job['model_id']}.tflite"
+if not os.path.exists(model_path):
+# Download from IPFS/S3
+download_model(job["model_id"], model_path)
+interpreter = tflite.Interpreter(model_path)
+interpreter.allocate_tensors()
+# Preprocess and infer
+features = preprocess(input_data)
+interpreter.set_tensor(0, features)
+start = time.time()
+interpreter.invoke()
+latency = (time.time() - start) * 1000
+output = interpreter.get_tensor(0)[0]
+result = {"prediction": float(output), "latency_ms": latency}
+# Compute hash
+result_json = json.dumps(result, sort_keys=True)
+result_hash = hashlib.sha256(result_json.encode()).hexdigest()
+# Upload to IPFS
+result_url = upload_to_ipfs(result_json)
+return result_hash, result_url, latency
+def submit_to_blockchain(job_id, result_hash, result_url):
+"""Submit result to smart contract"""
+contract = w3.eth.contract(address=CONTRACT_ADDRESS,
+abi=CONTRACT_ABI)
+txn = contract.functions.submitResult(
+int(job_id),
+Web3.toBytes(hexstr=result_hash),
+result_url
+).build_transaction({
+'from': account.address,
+'nonce': w3.eth.get_transaction_count(account.address),
+'gas': 200000,
+'gasPrice': w3.eth.gas_price
+})
+signed = w3.eth.account.sign_transaction(txn, WALLET_KEY)
+tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
+receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+return receipt.status == 1
+def main_loop():
+"""Main polling and execution loop"""
+print(f"Node {NODE_ID} started. Polling for jobs...")
+while True:
+try:
+# Heartbeat
+update_heartbeat()
+# Check for jobs
+jobs = poll_jobs()
+for job in jobs:
+# Estimate if we can handle it
+estimated_time = estimate_execution_time(job)
+if estimated_time < 5000: # <5 seconds
+print(f"Bidding on job {job['job_id']}")
+submit_bid(job["job_id"], estimated_time)
+# Check if we won any bids
+assigned_jobs = get_assigned_jobs(NODE_ID)
+for job in assigned_jobs:
+print(f"Executing job {job['job_id']}")
+result_hash, result_url, latency = execute_inference(job)
+# Submit to blockchain
+success = submit_to_blockchain(
+job["blockchain_job_id"],
+result_hash,
+result_url
+)
+if success:
+print(f"Job {job['job_id']} completed. Payment incoming!")
+mark_job_complete(job["job_id"], result_hash, result_url, latency)
+else:
+print(f"Blockchain submission failed for job {job['job_id']}")
+time.sleep(5) # Poll every 5 seconds
+except Exception as e:
+print(f"Error: {e}")
+time.sleep(10)
+if name == "main":
+main_loop()
+Dockerization (Dockerfile):
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+Install dependencies
+Copy node software
+RUN mkdir -p models
+CMD ["python", "node_daemon.py"]
+Docker Compose (docker-compose.yml):
+version: '3.8'
+services:
+node:
+build: .
+env_file: .env
+volumes:
+- ./models:/app/models
+- ./logs:/app/logs
+restart: unless-stopped
+network_mode: host
+Node Dashboard Component (NodeDashboard.tsx):
+import { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+import { useAccount } from 'wagmi';
+export function NodeDashboard() {
+const { address } = useAccount();
+const [nodeStats, setNodeStats] = useState(null);
+const [isRegistered, setIsRegistered] = useState(false);
+useEffect(() => {
+checkRegistration();
+}, [address]);
+async function checkRegistration() {
+const response = await fetch(/api/nodes/${address});
+if (response.ok) {
+const data = await response.json();
+setNodeStats(data);
+Create models directory
+Step 4: Frontend Integration (Hours 12-18)
+setIsRegistered(true);
+}
+}
+async function registerNode() {
+const provider = new ethers.BrowserProvider(window.ethereum);
+const signer = await provider.getSigner();
+const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI,
+signer);
+const tx = await contract.registerNode({
+value: ethers.parseEther("10") // 10 MATIC stake
+});
+await tx.wait();
+// Register in backend
+await fetch('/api/nodes/register', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ walletAddress: address })
+});
+await checkRegistration();
+}
+if (!isRegistered) {
+return (
+Stake 10 MATIC to start earning from AI inference jobs
+Register Node
+);
+}
+return (
+<div className="node-dashboard">
+Become a Node Operator
+Node ID {nodeStats.node_id}
+Reputation {(nodeStats.reputation_score * 100).toFixed(1)}%
+Jobs Completed {nodeStats.total_jobs_completed}
+Total Earned {nodeStats.total_earnings} MATIC
+<div className="software-download">
+<h3>Download Node Software</h3>
+<pre>
+git clone https://github.com/yourrepo/node-software.git
+cd node-software
+cp .env.example .env
+# Edit .env with your NODE_ID and API_KEY
+docker-compose up -d
+</pre>
+<button onClick={() => downloadFile('node-software.zip')}>
+Download ZIP
+</button>
+</div>
+<div className="recent-jobs">
+<h3>Recent Jobs</h3>
+<JobsTable nodeId={nodeStats.node_id} />
+</div>
+</div>
+);
+}
+Local Multi-Node Simulation:
+1. Clone node software 3 times: node1/, node2/, node3/
+2. Create 3 test wallets in MetaMask, fund with Mumbai faucet
+3. Edit each .env with unique NODE_ID, WALLET_PRIVATE_KEY
+4. Start all nodes: docker-compose up -d in each folder
+Node Dashboard
+Step 5: Testing Setup (Hours 18-20)
+5. Monitor logs: docker logs -f node1_node_1
+Test Workflow:
+1. Register 3 nodes via dashboard (3 browsers/wallets)
+2. Upload test model as creator (simple linear regression .tflite)
+3. Create job as buyer with test input data
+4. Observe node logs: all 3 nodes bid
+5. Winner executes inference, submits result
+6. Verify payment split on PolygonScan Mumbai
+7. Check reputation update in dashboard
+Smart Contract Tests (test/ModelMarketplace.test.js):
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
+describe("ModelMarketplace", function () {
+let marketplace, owner, node1, buyer;
+beforeEach(async function () {
+[owner, node1, buyer] = await ethers.getSigners();
+const Marketplace = await
+ethers.getContractFactory("ModelMarketplace");
+marketplace = await Marketplace.deploy();
+});
+it("Should register a node with stake", async function () {
+await marketplace.connect(node1).registerNode({
+value: ethers.parseEther("10")
+});
+const nodeData = await marketplace.nodes(node1.address);
+expect(nodeData.isActive).to.equal(true);
+Testing and Debugging
+Unit Testing
+expect(nodeData.stake).to.equal(ethers.parseEther("10"));
+expect(nodeData.reputation).to.equal(500);
+});
+it("Should create and assign job", async function () {
+await marketplace.connect(node1).registerNode({
+value: ethers.parseEther("10")
+});
+await marketplace.connect(buyer).createJob(1, ethers.ZeroHash, {
+value: ethers.parseEther("5")
+});
+await marketplace.assignJob(1, node1.address);
+const job = await marketplace.jobs(1);
+expect(job.assignedNode).to.equal(node1.address);
+expect(job.status).to.equal(1); // JobStatus.Assigned
+});
+it("Should split payment correctly after result submission", async
+function () {
+// Full workflow test
+await marketplace.connect(node1).registerNode({
+value: ethers.parseEther("10")
+});
+await marketplace.connect(buyer).createJob(1, ethers.ZeroHash, {
+value: ethers.parseEther("5")
+});
+await marketplace.assignJob(1, node1.address);
+const balanceBefore = await ethers.provider.getBalance(node1.address);
+await marketplace.connect(node1).submitResult(
+1,
+ethers.keccak256(ethers.toUtf8Bytes("result")),
+"ipfs://Qm..."
+);
+const balanceAfter = await ethers.provider.getBalance(node1.address);
+const earned = balanceAfter - balanceBefore;
+// Should receive ~60% (minus gas)
+expect(earned).to.be.closeTo(ethers.parseEther("3"), ethers.parseEther("0.1"))
+});
+});
+Run Tests: npx hardhat test
+Node Software Integration Test (tests/test_node.py):
+import pytest
+import time
+from node_daemon import poll_jobs, execute_inference,
+submit_to_blockchain
+@pytest.fixture
+def mock_job():
+return {
+"job_id": "test-123",
+"model_id": "credit-scoring-v2",
+"input_data_url": "https://test.com/input.json",
+"blockchain_job_id": 1
+}
+def test_job_polling():
+jobs = poll_jobs()
+assert isinstance(jobs, list)
+def test_inference_execution(mock_job):
+result_hash, result_url, latency = execute_inference(mock_job)
+Integration Testing
+assert len(result_hash) == 64 # SHA-256 hex
+assert result_url.startswith("ipfs://")
+assert latency < 500 # Must be <500ms
+def test_blockchain_submission(mock_job):
+result_hash = "a" * 64
+result_url = "ipfs://QmTest"
+success = submit_to_blockchain(1, result_hash, result_url)
+assert success == True
+def test_full_workflow(mock_job):
+"""End-to-end test"""
+# Simulate full job lifecycle
+result_hash, result_url, latency = execute_inference(mock_job)
+success = submit_to_blockchain(
+mock_job["blockchain_job_id"],
+result_hash,
+result_url
+)
+assert success
+assert latency < 500
+Run: pytest tests/ -v
+Common Issues and Solutions:
+Debugging Strategies
+Issue Symptom Solution
+Node not
+polling
+No "Polling..." logs Check BACKEND_URL in
+.env, verify Supabase API
+key
+Gas estimation
+failed
+Transaction
+reverts
+Increase gas limit in
+build_transaction(), check
+wallet has MATIC
+Model not
+found
+"File not found"
+error
+Run download_model() first,
+check IPFS gateway
+Hash
+mismatch
+Buyer disputes
+result
+Verify
+json.dumps(sort_keys=True)
+consistency
+Slow inference
+(>500ms)
+Timeout exceeded Quantize model with TFLite
+converter, optimize
+preprocessing
+Job stuck in
+"pending"
+No assignment Check node bidding logic,
+verify assignJob gets called
+Table 4: Common debugging scenarios
+Logging Best Practices:
+import logging
+logging.basicConfig(
+level=logging.INFO,
+format='%(asctime)s [%(levelname)s] %(message)s',
+handlers=[
+logging.FileHandler('logs/node.log'),
+logging.StreamHandler()
+]
+)
+logger = logging.getLogger(name)
+logger.info(f"Node {NODE_ID} started")
+logger.debug(f"Polling returned {len(jobs)} jobs")
+logger.error(f"Inference failed: {e}")
+Monitoring Dashboard:
+Use Grafana + Prometheus to track:
+Load Test Script (tests/load_test.py):
+import asyncio
+import aiohttp
+import time
+async def create_jobs(n=100):
+"""Create N jobs simultaneously"""
+async with aiohttp.ClientSession() as session:
+tasks = []
+for i in range(n):
+task = session.post(
+f"{BACKEND_URL}/api/jobs",
+json={
+"model_id": "credit-scoring-v2",
+"input_data": {...},
+"payment": 5
+}
+)
+tasks.append(task)
+Usage
+• Jobs processed per minute
+• Average inference latency
+• Node uptime percentage
+• Failed job rate
+• Gas costs per transaction
+Performance Testing
+start = time.time()
+responses = await asyncio.gather(*tasks)
+duration = time.time() - start
+success_count = sum(1 for r in responses if r.status == 201)
+print(f"Created {success_count}/{n} jobs in {duration:.2f}s")
+print(f"Throughput: {success_count/duration:.2f} jobs/sec")
+if name == "main":
+asyncio.run(create_jobs(100))
+Target Metrics:
+Reentrancy Protection:
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+contract ModelMarketplace is ReentrancyGuard {
+function submitResult(...) external nonReentrant {
+// Critical payment logic protected
+}
+}
+Access Control:
+modifier onlyAssignedNode(uint256 jobId) {
+require(jobs[jobId].assignedNode == msg.sender, "Unauthorized");
+_;
+}
+• Job creation: 50+ jobs/sec
+• Assignment latency: <2 seconds
+• Inference latency: <500ms (P95)
+• Blockchain confirmation: <30 seconds
+Security Considerations
+Smart Contract Security
+Integer Overflow: Use Solidity 0.8+ (built-in checks) or SafeMath
+library.
+Private Key Management:
+Input Validation:
+def validate_job_input(input_data):
+if not isinstance(input_data, dict):
+raise ValueError("Invalid input format")
+required_fields = ["upi_transactions", "voice_clip_url"]
+for field in required_fields:
+if field not in input_data:
+raise ValueError(f"Missing required field: {field}")
+# Sanitize file paths
+if ".." in input_data.get("model_path", ""):
+raise ValueError("Path traversal detected")
+Rate Limiting:
+from functools import lru_cache
+import time
+@lru_cache(maxsize=1000)
+def rate_limit_check(node_id, window=60):
+"""Max 100 bids per minute per node"""
+# Implementation with Redis or in-memory store
+pass
+Node Software Security
+• Never commit .env files
+• Use hardware wallets for production
+• Implement key rotation for API keys
+[ ] Smart contracts deployed and verified on Mumbai testnet
+[ ] Supabase database schema created with indexes
+[ ] Node software Docker images built and tested
+[ ] Frontend deployed to Vercel/Netlify
+[ ] API endpoints secured with authentication
+[ ] Test wallets funded with Mumbai MATIC
+[ ] Models uploaded to IPFS with valid hashes
+[ ] Documentation finalized (README, API docs)
+[ ] 3+ nodes running on different machines
+[ ] Creator account creates sample models
+[ ] Buyer account tests job submission
+[ ] Monitor logs for errors in real-time
+[ ] PolygonScan links ready for demo
+[ ] Video recording of full workflow
+[ ] GitHub repo public with clear README
+[ ] Pitch deck prepared with live demo link
+[ ] Node uptime tracking (>95% target)
+[ ] Error rate monitoring (<5%)
+[ ] Gas cost analysis (optimize if >0.5 MATIC/job)
+[ ] User feedback collection
+[ ] Performance metrics logging
+Check:
+Deployment Checklist
+Pre-Launch
+Launch Day
+Post-Launch Monitoring
+Troubleshooting Guide
+Node Won't Start
+• Docker daemon running: docker ps
+• Environment variables set: cat .env
+Check:
+Check:
+Optimize:
+• Port conflicts: netstat -an | grep 8080
+• Logs: docker logs node_container
+Jobs Not Being Assigned
+• Node reputation score >0.3
+• Node status is_active = true in DB
+• Bidding algorithm logic (SQL query)
+• Supabase RLS policies not blocking
+Blockchain Transaction Failing
+• Wallet has sufficient MATIC (gas + payment)
+• Contract address correct in .env
+• ABI matches deployed contract version
+• Gas price not too low (check Mumbai gas tracker)
+• RPC endpoint responding: curl $RPC_URL
+Inference Timeout
+• Quantize model: tflite_converter --quantize
+• Reduce input size (resize images, truncate audio)
+• Use threading for preprocessing
+• Cache model in memory (don't reload each time)
+Future Enhancements
+Phase 2 Features
+Optimistic Rollups: Batch multiple job results into single
+transaction, reducing gas costs by 90%
+•
+Node Staking Tiers: Higher stakes unlock priority job
+assignment
+•
+• Model Versioning: Support A/B testing of model updates
+• GPU Support: Detect CUDA availability, run heavier models
+1. Week 1-2: 10 nodes, 100 jobs/day baseline
+2. Month 1: 100 nodes across 5 cities, 1000 jobs/day
+3. Month 3: Migrate to Polygon mainnet, 500+ external nodes
+4. Month 6: Support 10K+ inference requests/day, profitable
+protocol fees
+This multi-node system creates a permissionless, trustless
+marketplace for AI inference where computation providers earn fair
+rewards and buyers access diverse models with cryptographic
+verification. The architecture balances decentralization with practical
+hackathon implementation constraints, using proven technologies
+(Polygon, TFLite, Docker) for rapid development.
+Key Success Metrics:
+By following this guide, you and your teammate will deliver a
+production-ready multi-node prototype that demonstrates the power
+of decentralized edge AI for financial inclusion, perfectly aligned with
+the Unisys "Agents Unleashed" theme.
+edge-ai-multinode/
+├── contracts/
+│ ├── ModelMarketplace.sol
+│ ├── hardhat.config.js
+│ └── scripts/
+│ └── deploy.js
+├── node-software/
+• Real-time Monitoring: Grafana dashboards for all nodes
+Scalability Roadmap
+Conclusion
+• 5+ nodes registered and actively processing jobs
+• <500ms average inference latency
+• 100% payment accuracy via smart contracts
+• Zero security incidents during demo
+Appendix A: Complete File Structure
+│ ├── Dockerfile
+│ ├── docker-compose.yml
+│ ├── requirements.txt
+│ ├── .env.example
+│ ├── node_daemon.py
+│ ├── inference_engine.py
+│ ├── blockchain_client.py
+│ ├── utils.py
+│ ├── models/
+│ └── logs/
+├── backend/
+│ ├── supabase/
+│ │ └── migrations/
+│ │ └── 001_initial_schema.sql
+│ └── api/
+│ ├── nodes.py
+│ └── jobs.py
+├── frontend/
+│ ├── src/
+│ │ ├── components/
+│ │ │ ├── NodeDashboard.tsx
+│ │ │ ├── BuyerDashboard.tsx
+│ │ │ └── CreatorDashboard.tsx
+│ │ ├── contracts/
+│ │ │ └── ModelMarketplace.json
+│ │ └── App.tsx
+│ └── package.json
+├── tests/
+│ ├── test_node.py
+│ ├── test_contracts.js
+│ └── load_test.py
+├── docs/
+│ └── API.md
+└── README.md
+NODE_ID=abc123-def456-ghi789
+API_KEY=your_supabase_anon_key
+WALLET_PRIVATE_KEY=0xYourPrivateKeyHere
+SUPABASE_URL=https://yourproject.supabase.co
+CONTRACT_ADDRESS=0xYourDeployedContractAddress
+RPC_URL=https://polygon-mumbai.g.alchemy.com/v2/YOUR_API_KEY
+IPFS_GATEWAY=https://gateway.pinata.cloud/ipfs/
+MODEL_CACHE_DIR=./models
+LOG_LEVEL=INFO
+npx hardhat compile
+npx hardhat run scripts/deploy.js --network mumbai
+npx hardhat verify --network mumbai 0xAddress
+docker-compose up -d # Start node
+docker logs -f edge-ai-multinode_node_1 # View logs
+docker-compose down # Stop node
+docker system prune -a # Clean up
+psql $DATABASE_URL < migrations/001_initial_schema.sql
+psql $DATABASE_URL -c "SELECT * FROM nodes WHERE
+is_active=true;"
+Appendix B: Environment Variables
+Reference
+Node Software .env
+Appendix C: Quick Command Reference
+Smart Contract Deployment
+Node Operations
+Database Operations
+npx hardhat test # Contract tests
+pytest tests/ -v # Python tests
+python tests/load_test.py # Load testing
+GET /api/jobs/pending:
+[
+{
+"job_id": "550e8400-e29b-41d4-a716-446655440000",
+"model_id": "credit-scoring-v2",
+"payment_amount": 5.0,
+"input_data_url": "ipfs://QmHash123...",
+"created_at": "2026-03-10T22:45:00Z"
+}
+]
+POST /api/jobs/{id}/bid:
+{
+"node_id": "abc123-def456",
+"estimated_time_ms": 450,
+"timestamp": "2026-03-10T22:45:05Z"
+}
+Response:
+{
+"status": "bid_accepted",
+"position": 2,
+"total_bids": 5
+}
+Testing
+Appendix D: API Response Examples

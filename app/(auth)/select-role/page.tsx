@@ -64,6 +64,10 @@ export default function SelectRolePage() {
     // Keep selected role for signup/login prefill.
     localStorage.setItem('pendingRole', selectedRole)
     
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    // Redirect to signup with selected role
     router.push(`/signup?role=${selectedRole}`)
   }
 
