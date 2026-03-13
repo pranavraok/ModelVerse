@@ -3,16 +3,9 @@
 import * as React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider } from 'wagmi';
-import { polygon, mainnet } from 'wagmi/chains';
-import { getDefaultConfig, RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
+import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
-
-const config = getDefaultConfig({
-  appName: 'ModelVerse',
-  projectId: 'YOUR_PROJECT_ID',
-  chains: [polygon, mainnet],
-  ssr: true,
-});
+import { config } from '@/lib/wagmi';
 
 const queryClient = new QueryClient();
 
