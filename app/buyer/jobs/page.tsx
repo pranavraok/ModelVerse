@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { cn } from "@/lib/utils"
 import { 
   Search,
   Play,
@@ -95,100 +96,120 @@ const statusConfig = {
 
 export default function JobsPage() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-transparent bg-mesh relative">
       <DashboardHeader 
-        title="My Jobs" 
-        subtitle="Track and manage your inference jobs"
+        title="Neural Jobs" 
+        subtitle="Monitor and manage your active inference cycles"
       />
       
-      <div className="p-6">
+      <div className="relative z-10 px-8 py-8">
         {/* Filters */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between mb-10">
+          <div className="relative flex-1 max-w-md group">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/30 group-focus-within:text-primary transition-colors" />
             <Input
-              placeholder="Search by job ID or model..."
-              className="bg-input/50 pl-9"
+              placeholder="Search by mission ID or model..."
+              className="h-12 bg-white/[0.02] border-white/[0.03] pl-11 rounded-2xl focus:ring-primary/20 focus:border-primary/40 text-white/80 placeholder:text-muted-foreground/20 font-medium"
             />
           </div>
           <div className="flex items-center gap-4">
             <Select defaultValue="all">
-              <SelectTrigger className="w-40 bg-input/50">
+              <SelectTrigger className="h-12 w-48 bg-white/[0.02] border-white/[0.03] rounded-2xl text-[11px] font-semibold text-neutral-500 text-muted-foreground/60 transition-all hover:bg-white/[0.04]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="running">Running</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
+              <SelectContent className="bg-[#0c0c0c] border-white/[0.05] rounded-2xl overflow-hidden">
+                <SelectItem value="all" className="text-[10px] capitalize font-semibold tracking-normal text-muted-foreground focus:bg-primary/10 focus:text-primary">All Activity</SelectItem>
+                <SelectItem value="pending" className="text-[10px] capitalize font-semibold tracking-normal text-muted-foreground focus:bg-primary/10 focus:text-primary">Pending</SelectItem>
+                <SelectItem value="running" className="text-[10px] capitalize font-semibold tracking-normal text-muted-foreground focus:bg-primary/10 focus:text-primary">Running</SelectItem>
+                <SelectItem value="completed" className="text-[10px] capitalize font-semibold tracking-normal text-muted-foreground focus:bg-primary/10 focus:text-primary">Success</SelectItem>
+                <SelectItem value="failed" className="text-[10px] capitalize font-semibold tracking-normal text-muted-foreground focus:bg-primary/10 focus:text-primary">Fault</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
 
         {/* Jobs List */}
-        <div className="space-y-4">
+        <div className="grid gap-6">
           {jobs.map((job) => {
             const status = statusConfig[job.status as keyof typeof statusConfig]
             const StatusIcon = status.icon
             
             return (
-              <Card key={job.id} className="border-border/40 bg-card/30 p-6">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${status.color.split(' ')[0]}`}>
-                      <StatusIcon className={`h-6 w-6 ${status.color.split(' ')[1]} ${job.status === 'running' ? 'animate-spin' : ''}`} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold">{job.model}</h3>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status.color}`}>
-                          {status.label}
-                        </span>
+              <div key={job.id} className="glass-card hover:bg-white/[0.03] transition-all duration-500 overflow-hidden group">
+                <div className="p-8">
+                  <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-6">
+                      <div className={cn(
+                        "flex h-16 w-16 items-center justify-center rounded-[1.5rem] border transition-all duration-500",
+                        job.status === 'running' ? "bg-primary/10 border-primary/20 shadow-[0_0_20px_rgba(139,92,246,0.1)]" :
+                        job.status === 'failed' ? "bg-red-500/10 border-red-500/20" :
+                        job.status === 'completed' ? "bg-emerald-500/10 border-emerald-500/20" :
+                        "bg-white/[0.02] border-white/5"
+                      )}>
+                        <StatusIcon className={cn(
+                          "h-8 w-8",
+                          job.status === 'running' ? "text-primary animate-spin" :
+                          job.status === 'failed' ? "text-red-400" :
+                          job.status === 'completed' ? "text-emerald-400" :
+                          "text-muted-foreground/30"
+                        )} />
                       </div>
-                      <p className="text-sm text-muted-foreground">{job.id}</p>
+                      <div>
+                        <div className="flex items-center gap-4">
+                          <h3 className="text-xl font-semibold tracking-normal text-white">{job.model}</h3>
+                          <span className={cn(
+                            "rounded-xl px-3 py-1 text-[9px] font-semibold text-neutral-500 border",
+                            job.status === 'running' ? "bg-primary/10 border-primary/20 text-primary" :
+                            job.status === 'failed' ? "bg-red-500/10 border-red-500/20 text-red-400" :
+                            job.status === 'completed' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" :
+                            "bg-white/[0.02] border-white/[0.03] text-muted-foreground/40"
+                          )}>
+                            {status.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[10px] font-semibold text-muted-foreground/20 capitalize tracking-normal">{job.id}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-10">
+                      <div className="text-right">
+                        <p className="text-lg font-semibold text-white tracking-normal">{job.cost}</p>
+                        <p className="text-[10px] font-semibold text-muted-foreground/20 text-neutral-500 mt-1 italic">{job.createdAt}</p>
+                      </div>
+                      <div className="flex gap-3">
+                        <Link href={`/buyer/jobs/${job.id}`}>
+                          <Button variant="ghost" className="h-12 w-12 rounded-2xl bg-white/[0.02] border border-white/[0.03] hover:bg-white/[0.04] text-muted-foreground/40 hover:text-white p-0">
+                            <Eye className="h-5 w-5" />
+                          </Button>
+                        </Link>
+                        {job.status === 'failed' && (
+                          <Button variant="ghost" className="h-12 w-12 rounded-2xl bg-red-500/5 border border-red-500/10 hover:bg-red-500/10 text-red-400 p-0">
+                            <RotateCcw className="h-5 w-5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <p className="font-semibold">{job.cost}</p>
-                      <p className="text-xs text-muted-foreground">{job.createdAt}</p>
+                  {/* Progress bar for running jobs */}
+                  {job.status === 'running' && (
+                    <div className="mt-8 pt-8 border-t border-white/5">
+                      <div className="flex justify-between text-[10px] font-semibold capitalize tracking-normalr mb-4">
+                        <span className="text-primary/60">Optimizing Neural Path</span>
+                        <span className="text-primary">{job.progress}%</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.02] border border-white/5">
+                        <div 
+                          className="h-full bg-gradient-to-r from-primary/40 to-primary transition-all duration-1000 relative shadow-[0_0_20px_rgba(139,92,246,0.6)]"
+                          style={{ width: `${job.progress}%` }}
+                        >
+                          <div className="absolute top-0 right-0 h-full w-20 bg-gradient-to-r from-transparent to-white/20 animate-pulse" />
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Link href={`/buyer/jobs/${job.id}`}>
-                        <Button variant="outline" size="sm" className="border-border/60">
-                          <Eye className="mr-2 h-4 w-4" />
-                          View
-                        </Button>
-                      </Link>
-                      {job.status === 'failed' && (
-                        <Button variant="outline" size="sm" className="border-border/60">
-                          <RotateCcw className="mr-2 h-4 w-4" />
-                          Retry
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+                  )}
                 </div>
-
-                {/* Progress bar for running jobs */}
-                {job.status === 'running' && (
-                  <div className="mt-4">
-                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                      <span>Progress</span>
-                      <span>{job.progress}%</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div 
-                        className="h-full bg-primary transition-all duration-500"
-                        style={{ width: `${job.progress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </Card>
+              </div>
             )
           })}
         </div>
