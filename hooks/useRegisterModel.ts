@@ -1,7 +1,7 @@
 "use client";
 
 import { useWriteContract } from 'wagmi';
-import { ModelRegistryABI } from '../lib/abis/ModelRegistryABI'; // Ensure path is right
+import ModelRegistryABI from '@/lib/abis/ModelRegistryABI.json';
 
 export function useRegisterModel() {
   const { writeContract, data: hash, isPending, error } = useWriteContract();

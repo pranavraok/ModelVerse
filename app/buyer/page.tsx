@@ -152,7 +152,7 @@ export default function BuyerDashboard() {
                     {stat.change}
                   </div>
                 </div>
-                <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br ${stat.color}`}>
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-linear-to-br ${stat.color}`}>
                   <stat.icon className={`h-5 w-5 ${stat.title === 'Active Jobs' ? 'animate-spin' : ''}`} />
                 </div>
               </div>
@@ -163,7 +163,7 @@ export default function BuyerDashboard() {
         {/* Quick Actions */}
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           <Link href="/marketplace">
-            <Card className="group flex cursor-pointer items-center gap-4 border-border/40 bg-gradient-to-br from-primary/10 to-primary/5 p-6 transition-all hover:border-primary/40">
+            <Card className="group flex cursor-pointer items-center gap-4 border-border/40 bg-linear-to-br from-primary/10 to-primary/5 p-6 transition-all hover:border-primary/40">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/20">
                 <Store className="h-6 w-6 text-primary" />
               </div>
@@ -175,7 +175,7 @@ export default function BuyerDashboard() {
             </Card>
           </Link>
           <Link href="/buyer/jobs">
-            <Card className="group flex cursor-pointer items-center gap-4 border-border/40 bg-gradient-to-br from-accent/10 to-accent/5 p-6 transition-all hover:border-accent/40">
+            <Card className="group flex cursor-pointer items-center gap-4 border-border/40 bg-linear-to-br from-accent/10 to-accent/5 p-6 transition-all hover:border-accent/40">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/20">
                 <Play className="h-6 w-6 text-accent" />
               </div>

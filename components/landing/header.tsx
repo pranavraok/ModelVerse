@@ -14,7 +14,7 @@ export function Header() {
         <div className="flex items-center gap-2 group cursor-pointer">
           <div className="relative flex h-8 w-8 items-center justify-center mr-1">
             {/* Glowing backdrop */}
-            <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 opacity-40 blur-md group-hover:opacity-70 transition-opacity duration-500"></div>
+            <div className="absolute inset-0 rounded-full bg-linear-to-tr from-blue-500 to-purple-500 opacity-40 blur-md group-hover:opacity-70 transition-opacity duration-500"></div>
             
             {/* Minimalist Orbit Shape */}
             <div className="relative h-6 w-6">
