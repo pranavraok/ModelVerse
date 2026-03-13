@@ -1,19 +1,25 @@
 "use client";
-
 import { useWriteContract } from 'wagmi';
 import ModelRegistryABI from '@/lib/abis/ModelRegistryABI.json';
 
-export function useRegisterModel() {
-  const { writeContract, data: hash, isPending, error } = useWriteContract();
+const CONTRACT_ADDRESS = "0x818e9Df23c8A2B61b7796b0A081C0bA1014d1d91";
 
-  const register = (creatorAddress: `0x${string}`, ipfsCID: string) => {
-    writeContract({
-      address: '0x818e9Df23c8A2B61b7796b0A081C0bA1014d1d91', // Your deployed address
-      abi: ModelRegistryABI,
-      functionName: 'registerModel',
-      args: [creatorAddress, ipfsCID],
-    });
+export function useRegisterModel() {
+  const { writeContractAsync, isPending, data: hash } = useWriteContract();
+
+  const register = async (creatorAddress: string, ipfsCID: string) => {
+    try {
+      await writeContractAsync({
+        address: CONTRACT_ADDRESS as `0x${string}`,
+        abi: ModelRegistryABI,
+        functionName: 'registerModel',
+        args: [creatorAddress, ipfsCID],
+      });
+    } catch (err) {
+      console.error("Contract Call Failed:", err);
+      throw err;
+    }
   };
 
-  return { register, hash, isPending, error };
+  return { register, isPending, hash };
 }

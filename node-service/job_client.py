@@ -90,6 +90,7 @@ class JobClient:
         base_url: str | None = None,
         node_id: str | None = None,
         api_key: str | None = None,
+        wallet_address: str | None = None,
     ) -> None:
         # Legacy compatibility: JobClient(base_url, node_id, api_key)
         # and JobClient(base_url=..., node_id=..., api_key=...)
@@ -108,7 +109,10 @@ class JobClient:
 
         self.ws_url = resolved_url.rstrip("/")
         self.auth_token = auth_token
+        self.wallet_address = wallet_address
         self.auth_mode = os.getenv("COORDINATOR_AUTH_MODE", "header").strip().lower() or "header"
+        self.api_key_header = os.getenv("BACKEND_API_KEY_HEADER", "x-node-api-key").strip() or "x-node-api-key"
+        self.api_key_query_param = os.getenv("BACKEND_API_KEY_QUERY_PARAM", "api_key").strip() or "api_key"
         self.log = logger or _log
         self.node_id = node_id
 
@@ -119,7 +123,14 @@ class JobClient:
         if self._session is not None and self._ws is not None and not self._ws.closed:
             return
 
-        url, headers = _build_ws_auth(self.ws_url, self.auth_token, self.auth_mode)
+        url, headers = _build_ws_auth(
+            self.ws_url,
+            auth_token=self.auth_token,
+            auth_mode=self.auth_mode,
+            wallet_address=self.wallet_address,
+            api_key_header=self.api_key_header,
+            api_key_query_param=self.api_key_query_param,
+        )
         self._session = aiohttp.ClientSession()
         self._ws = await self._session.ws_connect(url, headers=headers)
         self.log.info("Connected to coordinator websocket: %s", url)
@@ -187,16 +198,29 @@ class JobClient:
         return
 
 
-def _build_ws_auth(ws_url: str, auth_token: str | None, auth_mode: str) -> tuple[str, dict[str, str] | None]:
+def _build_ws_auth(
+    ws_url: str,
+    auth_token: str | None,
+    auth_mode: str,
+    wallet_address: str | None,
+    api_key_header: str,
+    api_key_query_param: str,
+) -> tuple[str, dict[str, str]]:
+    headers: dict[str, str] = {}
+    if wallet_address:
+        headers["x-wallet-address"] = wallet_address
+
     if not auth_token:
-        return ws_url, None
+        return ws_url, headers
 
     if auth_mode == "query":
         parsed = urlparse(ws_url)
         query_items = dict(parse_qsl(parsed.query))
-        query_items["token"] = auth_token
+        query_items[api_key_query_param] = auth_token
+        # Also include header-name key for easy backend compatibility toggles.
+        query_items.setdefault(api_key_header, auth_token)
         updated = parsed._replace(query=urlencode(query_items))
-        return urlunparse(updated), None
+        return urlunparse(updated), headers
 
-    headers = {"Authorization": f"Bearer {auth_token}"}
+    headers[api_key_header] = auth_token
     return ws_url, headers
