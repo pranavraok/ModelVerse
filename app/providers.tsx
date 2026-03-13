@@ -1,13 +1,11 @@
 "use client";
 
+import { useState } from 'react';
 import '@rainbow-me/rainbowkit/styles.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider } from 'wagmi';
 import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
-import '@rainbow-me/rainbowkit/styles.css';
 import { config } from '@/lib/wagmi';
-
-const queryClient = new QueryClient();
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // We use useState here to prevent data from leaking between users in Next.js
