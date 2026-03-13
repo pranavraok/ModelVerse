@@ -1,20 +1,9 @@
-"""
-model_cache.py – File-based LRU model cache for ModelVerse node-service.
-
-Cache key: IPFS CID.
-File path convention: <cache_dir>/<cid>.onnx
-
-On startup, the directory is scanned and existing .onnx files are
-re-registered in the in-memory index.  Eviction is LRU by last_accessed.
-"""
-
 from __future__ import annotations
 
 import os
 import tempfile
-import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -23,189 +12,105 @@ from utils import ensure_dir
 
 _log = get_logger(__name__)
 
-# ── Data model ────────────────────────────────────────────────────────────────
-
 
 @dataclass
 class CachedModel:
-    """Metadata for a single cached ONNX model file."""
-
-    cid: str                   # IPFS CID used as the cache key
-    path: Path                 # Absolute path to the .onnx file on disk
-    size_bytes: int            # File size in bytes at time of registration
-    last_accessed: datetime    # UTC timestamp of most-recent access
-
-    @property
-    def size_mb(self) -> float:
-        return self.size_bytes / (1024 * 1024)
-
-
-# ── Cache manager ─────────────────────────────────────────────────────────────
+    cid: str
+    path: Path
+    size_bytes: int
+    last_accessed: datetime
 
 
 class ModelCache:
-    """
-    Async-capable, file-backed LRU cache for ONNX model files.
-
-    Args:
-        cache_dir:    Directory where model files are stored.
-        max_cache_mb: Hard limit on combined file size in MiB.
-    """
-
     def __init__(self, cache_dir: Path, max_cache_mb: int) -> None:
-        self._dir: Path = ensure_dir(cache_dir)
-        self._max_bytes: int = max_cache_mb * 1024 * 1024
+        self.cache_dir = ensure_dir(cache_dir)
+        self.max_cache_mb = max_cache_mb
+        self._max_cache_bytes = max_cache_mb * 1024 * 1024
         self._index: dict[str, CachedModel] = {}
-
-        _log.info(
-            "ModelCache initialised – dir=%s budget=%d MiB",
-            self._dir, max_cache_mb,
-        )
-        self._scan_existing()
-
-    # ── Public API ────────────────────────────────────────────────────────────
+        self._load_existing()
 
     async def get_or_fetch(
         self,
         cid: str,
         fetcher: Callable[[str], Awaitable[bytes]],
     ) -> CachedModel:
-        """
-        Return the cached model for *cid*, downloading it first if absent.
+        existing = self._index.get(cid)
+        if existing is not None and existing.path.exists():
+            self.touch(cid)
+            return self._index[cid]
 
-        Args:
-            cid:     IPFS Content Identifier.
-            fetcher: Async callable ``(cid) -> bytes`` – called only on miss.
+        if existing is not None and not existing.path.exists():
+            self._index.pop(cid, None)
 
-        Returns:
-            :class:`CachedModel` metadata (path, size, last_accessed).
-        """
-        # ── Cache hit ─────────────────────────────────────────────────────────
-        if cid in self._index:
-            entry = self._index[cid]
-            if entry.path.exists():
-                self.touch(cid)
-                _log.debug("Cache HIT  – cid=%s", cid)
-                return self._index[cid]
-            # Stale reference (file deleted externally)
-            _log.warning("Stale cache entry for cid=%s – will re-fetch.", cid)
-            del self._index[cid]
+        model_bytes = await fetcher(cid)
+        target_path = self.cache_dir / f"{cid}.onnx"
+        self._write_atomic(target_path, model_bytes)
 
-        # ── Cache miss: download ───────────────────────────────────────────────
-        _log.info("Cache MISS – fetching cid=%s", cid)
-        raw_bytes: bytes = await fetcher(cid)
-
-        target_path: Path = self._dir / f"{cid}.onnx"
-        self._write_atomic(target_path, raw_bytes)
-
-        entry = CachedModel(
+        cached = CachedModel(
             cid=cid,
-            path=target_path.resolve(),
-            size_bytes=len(raw_bytes),
-            last_accessed=_utcnow(),
+            path=target_path,
+            size_bytes=target_path.stat().st_size,
+            last_accessed=_utc_now(),
         )
-        self._index[cid] = entry
-        _log.info(
-            "Cached model cid=%s size=%.2f MiB → %s",
-            cid, entry.size_mb, target_path,
-        )
-
+        self._index[cid] = cached
         self.evict_if_needed()
-        return entry
+        return cached
 
     def touch(self, cid: str) -> None:
-        """Update the ``last_accessed`` timestamp for *cid* (if present)."""
-        if cid in self._index:
-            self._index[cid].last_accessed = _utcnow()
+        cached = self._index.get(cid)
+        if cached is None:
+            return
+        cached.last_accessed = _utc_now()
 
     def current_size_mb(self) -> float:
-        """Return the total size of all cached files in MiB."""
-        return sum(e.size_bytes for e in self._index.values()) / (1024 * 1024)
+        total_bytes = sum(item.size_bytes for item in self._index.values())
+        return total_bytes / (1024 * 1024)
 
     def evict_if_needed(self) -> None:
-        """Evict least-recently-used models until total size ≤ max_cache_mb."""
-        current_bytes = sum(e.size_bytes for e in self._index.values())
-        if current_bytes <= self._max_bytes:
+        total_bytes = sum(item.size_bytes for item in self._index.values())
+        if total_bytes <= self._max_cache_bytes:
             return
 
-        # Sort ascending by last_accessed (oldest = evict first)
-        lru_order = sorted(self._index.values(), key=lambda e: e.last_accessed)
-        for entry in lru_order:
-            if current_bytes <= self._max_bytes:
+        # Least recently used entries are evicted first.
+        ordered = sorted(self._index.values(), key=lambda item: item.last_accessed)
+        for entry in ordered:
+            if total_bytes <= self._max_cache_bytes:
                 break
-            _log.info(
-                "Evicting cid=%s (%.2f MiB) to meet budget.",
-                entry.cid, entry.size_mb,
-            )
+
             try:
                 entry.path.unlink(missing_ok=True)
             except OSError as exc:
-                _log.warning("Could not delete %s: %s", entry.path, exc)
-            current_bytes -= entry.size_bytes
-            del self._index[entry.cid]
+                _log.warning("Failed to remove cached model %s: %s", entry.path, exc)
 
-    # ── Internals ─────────────────────────────────────────────────────────────
+            total_bytes -= entry.size_bytes
+            self._index.pop(entry.cid, None)
 
-    def _scan_existing(self) -> None:
-        """Populate the index from .onnx files already on disk."""
-        count = 0
-        for model_file in sorted(self._dir.glob("*.onnx")):
-            cid = model_file.stem
-            entry = CachedModel(
+    def _load_existing(self) -> None:
+        for file_path in self.cache_dir.glob("*.onnx"):
+            cid = file_path.stem
+            self._index[cid] = CachedModel(
                 cid=cid,
-                path=model_file.resolve(),
-                size_bytes=model_file.stat().st_size,
-                last_accessed=_utcnow(),
+                path=file_path,
+                size_bytes=file_path.stat().st_size,
+                last_accessed=_utc_now(),
             )
-            self._index[cid] = entry
-            count += 1
-            _log.debug("Discovered cached model cid=%s (%.2f MiB)", cid, entry.size_mb)
-
-        _log.info(
-            "Cache scan complete – %d model(s), %.2f MiB used",
-            count, self.current_size_mb(),
-        )
 
     @staticmethod
-    def _write_atomic(dest: Path, data: bytes) -> None:
-        """Write *data* to *dest* atomically using a sibling temp file."""
-        parent = dest.parent
-        fd, tmp_path = tempfile.mkstemp(dir=parent, suffix=".tmp")
+    def _write_atomic(path: Path, content: bytes) -> None:
+        fd, temp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
         try:
-            with os.fdopen(fd, "wb") as fh:
-                fh.write(data)
-            # Atomic rename (POSIX) / best-effort on Windows
-            Path(tmp_path).replace(dest)
+            with os.fdopen(fd, "wb") as tmp_file:
+                tmp_file.write(content)
+            Path(temp_path).replace(path)
         except Exception:
-            # Clean up temp file on failure
-            try:
-                Path(tmp_path).unlink(missing_ok=True)
-            except OSError:
-                pass
+            Path(temp_path).unlink(missing_ok=True)
             raise
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-
-def _utcnow() -> datetime:
-    return datetime.now(tz=timezone.utc)
-
-
-def build_model_cache() -> ModelCache:
-    """
-    Construct a :class:`ModelCache` from environment variables.
-
-    Reads ``MODEL_CACHE_DIR`` (default ``./models_cache``) and
-    ``max_model_cache_mb`` from the node config if available, or defaults
-    to 2048 MiB.
-    """
+def create_default_model_cache(max_cache_mb: int = 1024) -> ModelCache:
     cache_dir = Path(os.getenv("MODEL_CACHE_DIR", "./models_cache"))
-    # Attempt to read YAML config; fall back to 2048 MiB if unavailable.
-    try:
-        from utils import load_config
-        cfg = load_config()
-        max_mb: int = int(cfg.get("performance", {}).get("max_model_cache_mb", 2048))
-    except Exception:  # noqa: BLE001
-        max_mb = 2048
-    return ModelCache(cache_dir=cache_dir, max_cache_mb=max_mb)
+    return ModelCache(cache_dir=cache_dir, max_cache_mb=max_cache_mb)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
