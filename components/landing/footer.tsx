@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { Cpu, Twitter, Github, Send } from "lucide-react"
+import Image from "next/image"
+import { Twitter, Github, Send } from "lucide-react"
 
 const footerLinks = {
   Platform: [
@@ -42,11 +43,14 @@ export function Footer() {
         <div className="grid gap-12 lg:grid-cols-6">
           {/* Brand */}
           <div className="lg:col-span-2">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 border border-white/10 shadow-inner">
-                <Cpu className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-xl font-bold tracking-tight text-white/90">ModelVerse</span>
+              <div className="flex items-center">
+              <Image
+                src="/logo.png"
+                alt="ModelVerse"
+                  width={260}
+                  height={70}
+                  className="h-14 w-auto"
+              />
             </div>
             <p className="mt-4 max-w-xs text-sm text-gray-400 font-light leading-relaxed">
               The decentralized marketplace for AI models. Upload, monetize, and run AI with blockchain-powered trust.
@@ -90,9 +94,7 @@ export function Footer() {
 
         {/* Bottom */}
         <div className="mt-16 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 sm:flex-row">
-          <p className="text-sm text-gray-500 font-light">
-            © 2026 ModelVerse. All rights reserved.
-          </p>
+          <p className="text-sm text-gray-500 font-light">© 2026. All rights reserved.</p>
           <div className="flex gap-6">
             <Link href="/privacy" className="text-sm text-gray-500 font-light hover:text-white transition-colors">
               Privacy Policy

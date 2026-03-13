@@ -1,8 +1,8 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Sparkles } from "lucide-react"
 
 export function CTA() {
   return (
@@ -18,11 +18,14 @@ export function CTA() {
 
         <div className="relative z-10 flex flex-col items-center w-full">
           {/* Top Logo Badge */}
-          <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-white/20 bg-white/3 px-5 py-2 backdrop-blur-md shadow-lg">
-            <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-white text-black">
-              <Sparkles className="h-4 w-4" />
-            </div>
-            <span className="text-base font-semibold text-white tracking-wide">ModelVerse</span>
+          <div className="mb-8 inline-flex items-center rounded-full border border-white/20 bg-white/3 px-6 py-3 backdrop-blur-md shadow-lg">
+            <Image
+              src="/logo.png"
+              alt="ModelVerse"
+              width={240}
+              height={64}
+              className="h-14 w-auto"
+            />
           </div>
           
           {/* Main Heading styled like the reference */}
@@ -33,7 +36,7 @@ export function CTA() {
           
           {/* Subheading styled like the reference */}
           <p className="mt-2 text-lg md:text-xl text-gray-400 font-light leading-relaxed max-w-2xl">
-            Join the ModelVerse ecosystem to demonstrate your AI models. <br className="hidden md:block"/>
+            Join the ecosystem to demonstrate your AI models. <br className="hidden md:block"/>
             Publish your work and secure funding in as little as 4 days.
           </p>
           
