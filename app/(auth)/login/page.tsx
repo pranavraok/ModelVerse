@@ -172,8 +172,8 @@ export default function LoginPage() {
         
         <p className="mt-8 text-center text-sm text-muted-foreground/80">
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="font-semibold text-foreground hover:text-primary transition-colors">
-            Sign up for free
+          <Link href="/select-role" className="font-semibold text-foreground hover:text-primary transition-colors">
+            Sign up here free
           </Link>
         </p>
       </div>
