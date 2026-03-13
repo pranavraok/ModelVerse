@@ -4,13 +4,15 @@ import json
 import asyncio
 import logging
 import base64
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Literal
 from contextlib import suppress
 from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import Depends, FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect, status, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -74,11 +76,13 @@ JOB_MANAGER_ADDRESS = os.getenv(
 )
 _web3_listener_task: asyncio.Task | None = None
 active_nodes: Dict[str, WebSocket] = {}
+websocket_connections: Dict[str, WebSocket] = active_nodes
 
 # 1x1 red PNG, used only as a fallback when jobs table does not yet store input_base64.
 _DUMMY_INPUT_BASE64 = (
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 )
+_PINATA_PIN_FILE_URL = "https://api.pinata.cloud/pinning/pinFileToIPFS"
 
 
 # ─────────────────────────── Pydantic models ────────────────────────────────
@@ -97,6 +101,16 @@ class LoginRequest(BaseModel):
 
 class SelectRoleRequest(BaseModel):
     role: Literal["creator", "buyer", "node-operator"]
+
+
+class NodeHeartbeat(BaseModel):
+    node_id: str | None = None
+
+
+class JobResult(BaseModel):
+    node_id: str | None = None
+    results: Any | None = None
+    output: Any | None = None
 
 
 # ─────────────────────────── Supabase helpers ───────────────────────────────
@@ -256,16 +270,139 @@ def _extract_creator_wallet(job_row: dict[str, Any]) -> str:
 
 
 def _build_job_payload(job_row: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "type": "job_assigned",
-        "job": {
-            "job_id": str(job_row.get("id") or ""),
-            "model_cid": str(job_row.get("model_cid") or "QmPlaceholderModelCid"),
-            "model_input_type": str(job_row.get("model_input_type") or "image"),
-            "input_base64": str(job_row.get("input_base64") or _DUMMY_INPUT_BASE64),
-            "creator_address": _extract_creator_wallet(job_row),
-        },
+    payload = {
+        "job_id": str(job_row.get("id") or ""),
+        "model_cid": str(job_row.get("model_cid") or "QmPlaceholderModelCid"),
+        "model_hash": str(job_row.get("model_hash") or ""),
+        "model_input_type": str(job_row.get("model_input_type") or "image"),
+        "input_base64": str(job_row.get("input_base64") or _DUMMY_INPUT_BASE64),
+        "creator_address": _extract_creator_wallet(job_row),
     }
+
+    return {
+        "type": "job",
+        # Keep both keys for compatibility with existing node clients.
+        "job": payload,
+        "payload": payload,
+    }
+
+
+def _encode_multipart_with_file(
+    fields: dict[str, str],
+    file_field_name: str,
+    filename: str,
+    file_bytes: bytes,
+    content_type: str,
+) -> tuple[bytes, str]:
+    boundary = f"----ModelVerseBoundary{uuid.uuid4().hex}"
+    body = bytearray()
+
+    for key, value in fields.items():
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(
+            f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode("utf-8")
+        )
+        body.extend(str(value).encode("utf-8"))
+        body.extend(b"\r\n")
+
+    body.extend(f"--{boundary}\r\n".encode("utf-8"))
+    body.extend(
+        (
+            f'Content-Disposition: form-data; name="{file_field_name}"; '
+            f'filename="{filename}"\r\n'
+        ).encode("utf-8")
+    )
+    body.extend(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
+    body.extend(file_bytes)
+    body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
+
+    return bytes(body), boundary
+
+
+def _upload_file_to_pinata(
+    *,
+    filename: str,
+    file_bytes: bytes,
+    content_type: str,
+    metadata: dict[str, Any],
+) -> str:
+    pinata_jwt = os.getenv("PINATA_JWT") or os.getenv("NEXT_PUBLIC_PINATA_JWT")
+    if not pinata_jwt:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Missing PINATA_JWT in backend environment",
+        )
+
+    fields = {
+        "pinataMetadata": json.dumps(metadata),
+        "pinataOptions": json.dumps({"cidVersion": 1}),
+    }
+    body, boundary = _encode_multipart_with_file(
+        fields=fields,
+        file_field_name="file",
+        filename=filename,
+        file_bytes=file_bytes,
+        content_type=content_type,
+    )
+
+    request = urllib.request.Request(
+        _PINATA_PIN_FILE_URL,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {pinata_jwt}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=35) as response:
+            raw = response.read().decode("utf-8")
+            payload = json.loads(raw)
+    except urllib.error.HTTPError as exc:
+        error_body = ""
+        with suppress(Exception):
+            error_body = exc.read().decode("utf-8")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Pinata upload failed: {error_body or str(exc)}",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Pinata upload failed: {exc}",
+        ) from exc
+
+    cid = str(payload.get("IpfsHash") or "").strip()
+    if not cid:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Pinata response did not include IpfsHash",
+        )
+    return cid
+
+
+def _try_insert_model_rows(candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    last_error: Exception | None = None
+    for payload in candidates:
+        try:
+            response = supabase.table("models").insert(payload).execute()
+            if response.data:
+                return response.data[0]
+        except Exception as exc:
+            text = str(exc).lower()
+            if "duplicate" in text and "ipfs_cid" in text:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="This file is already registered (duplicate ipfs_cid)",
+                ) from exc
+            last_error = exc
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Failed to insert model into Supabase: {last_error}",
+    )
 
 
 # ─────────────────────────── WebSocket helpers ──────────────────────────────
@@ -512,6 +649,111 @@ def list_models_api(
     }
 
 
+@app.post("/api/models/upload")
+def upload_model_to_ipfs_and_db(
+    name: str = Form(...),
+    description: str = Form(default=""),
+    category: str = Form(default="other"),
+    sample_input: str = Form(default=""),
+    expected_output: str = Form(default=""),
+    price: str = Form(default="0"),
+    model_file: UploadFile = File(...),
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    wallet = str(current_user.get("wallet") or "").strip().lower()
+    if not wallet:
+        raise HTTPException(status_code=401, detail="Missing creator wallet")
+
+    filename = (model_file.filename or "model.bin").strip()
+    ext = Path(filename).suffix.lower()
+    if ext not in {".onnx", ".tflite"}:
+        raise HTTPException(status_code=400, detail="Only .onnx and .tflite files are allowed")
+
+    file_bytes = model_file.file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    if len(file_bytes) > 100 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File exceeds 100MB limit")
+
+    content_type = model_file.content_type or "application/octet-stream"
+    cid = _upload_file_to_pinata(
+        filename=filename,
+        file_bytes=file_bytes,
+        content_type=content_type,
+        metadata={
+            "name": name,
+            "keyvalues": {
+                "creator_wallet": wallet,
+                "category": category,
+                "filename": filename,
+            },
+        },
+    )
+
+    parsed_price = 0.0
+    with suppress(Exception):
+        parsed_price = float(price)
+
+    base_payload = {
+        "ipfs_cid": cid,
+        "description": description,
+        "category": category,
+        "status": "active",
+        "sample_input": sample_input,
+        "expected_output": expected_output,
+    }
+
+    candidates = [
+        {
+            **base_payload,
+            "name": name,
+            "creator_wallet": wallet,
+            "price_matic": parsed_price,
+            "file_name": filename,
+        },
+        {
+            **base_payload,
+            "model_name": name,
+            "creator_wallet": wallet,
+            "price": parsed_price,
+            "file_name": filename,
+        },
+        {
+            **base_payload,
+            "name": name,
+            "creator_address": wallet,
+            "price_matic": parsed_price,
+            "file_name": filename,
+        },
+        {
+            **base_payload,
+            "model_name": name,
+            "creator_address": wallet,
+            "price": parsed_price,
+            "file_name": filename,
+        },
+        {
+            **base_payload,
+            "creator_wallet": wallet,
+        },
+        {
+            **base_payload,
+            "creator_address": wallet,
+        },
+        base_payload,
+    ]
+
+    inserted = _try_insert_model_rows(candidates)
+    gateway = os.getenv("PINATA_GATEWAY_URL", "https://gateway.pinata.cloud/ipfs/").rstrip("/")
+
+    return {
+        "message": "Model uploaded and stored successfully",
+        "ipfs_cid": cid,
+        "ipfs_url": f"{gateway}/{cid}",
+        "model": inserted,
+    }
+
+
 # ─────────────────────────── Node routes ────────────────────────────────────
 
 @app.post("/api/nodes/register")
@@ -554,7 +796,10 @@ def register_node(current_user: dict[str, Any] = Depends(get_current_user)):
 
 
 @app.post("/api/nodes/heartbeat")
-async def node_heartbeat(current_user: dict[str, Any] = Depends(get_current_user)):
+async def node_heartbeat(
+    request: NodeHeartbeat | None = None,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
     """
     HTTP heartbeat endpoint for node-service.
     Node sends POST /api/nodes/heartbeat with x-wallet-address header.
@@ -576,11 +821,81 @@ async def node_heartbeat(current_user: dict[str, Any] = Depends(get_current_user
             continue
 
     logger.debug("Heartbeat: wallet=%s updated_last_seen=%s", wallet, updated)
+
+    # Resolve node_id from request or wallet lookup.
+    node_id = (request.node_id if request else None) or ""
+    if not node_id:
+        for wallet_col in ("wallet", "wallet_address", "operator_wallet"):
+            try:
+                row = (
+                    supabase.table("nodes")
+                    .select("id")
+                    .eq(wallet_col, wallet)
+                    .eq("status", "active")
+                    .limit(1)
+                    .execute()
+                )
+                if row.data:
+                    node_id = str(row.data[0].get("id") or "")
+                    if node_id:
+                        break
+            except Exception:
+                continue
+
+    assigned_count = 0
+    if node_id:
+        try:
+            pending_jobs = (
+                supabase.table("jobs")
+                .select("*")
+                .eq("status", "pending")
+                .eq("assigned_node_id", node_id)
+                .execute()
+            )
+            for job in pending_jobs.data or []:
+                if node_id not in websocket_connections:
+                    continue
+
+                payload = _build_job_payload(job)
+                try:
+                    await websocket_connections[node_id].send_json(payload)
+                    assigned_count += 1
+                    logger.info("Job assigned: %s -> node %s", job.get("id"), node_id)
+
+                    # Mark as assigned to avoid duplicate sends on next heartbeat.
+                    with suppress(Exception):
+                        supabase.table("jobs").update({"status": "assigned"}).eq(
+                            "id", job.get("id")
+                        ).execute()
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to send job_id=%s to node_id=%s: %s",
+                        job.get("id"),
+                        node_id,
+                        exc,
+                    )
+        except Exception as exc:
+            logger.warning("Heartbeat job assignment failed for node_id=%s: %s", node_id, exc)
+
     return {
         "status": "alive",
         "wallet": wallet,
+        "node_id": node_id or None,
+        "assigned_jobs": assigned_count,
         "updated_last_seen": updated,
     }
+
+
+@app.post("/api/jobs/{job_id}/result")
+async def job_result(job_id: str, result: JobResult):
+    update_payload: dict[str, Any] = {"status": "completed"}
+    result_value = result.output if result.output is not None else result.results
+    if result_value is not None:
+        update_payload["result"] = json.dumps(result_value)
+
+    supabase.table("jobs").update(update_payload).eq("id", job_id).execute()
+    logger.info("Job %s completed", job_id)
+    return {"status": "received"}
 
 
 # ─────────────────────────── Jobs route ─────────────────────────────────────
@@ -658,20 +973,7 @@ async def ws_jobs(
     x_node_api_key: str | None = Header(default=None, alias="x-node-api-key"),
     api_key_query: str | None = Query(default=None, alias="api_key"),
 ):
-    """
-    Persistent WebSocket connection for node job assignment.
-
-    Auth flow (NO HTTPException — uses websocket.close(1008) instead):
-      1. Extract wallet from x-wallet-address header.
-      2. Extract api_key from x-node-api-key header OR ?api_key= query param.
-      3. Look up active node in Supabase nodes table.
-      4. Accept connection only if node found.
-
-    After accept:
-      - Polls Supabase for pending jobs every second.
-      - Assigns job to node, sends job_assigned payload.
-      - Waits for job_result response, marks job completed.
-    """
+    """Persistent WebSocket endpoint for node connectivity + job_result handling."""
     # ── 1. Extract credentials from headers / query params ───────────────
     wallet = (
         x_wallet_address
@@ -708,113 +1010,31 @@ async def ws_jobs(
 
     # ── 3. Accept and register ─────────────────────────────────────────────
     await websocket.accept()
-    active_nodes[node_id] = websocket
+    websocket_connections[node_id] = websocket
     logger.info("Node connected: wallet=%s node_id=%s", wallet, node_id)
 
     try:
-        # ── 4. Job assignment loop ─────────────────────────────────────────
         while True:
-            # Poll for the oldest unassigned pending job.
-            pending_jobs: list[dict[str, Any]] = []
-            try:
-                jobs_res = (
-                    supabase.table("jobs")
-                    .select("*")
-                    .eq("status", "pending")
-                    .is_("assigned_node_id", "null")
-                    .order("created_at", desc=False)
-                    .limit(1)
-                    .execute()
-                )
-                pending_jobs = jobs_res.data or []
-            except Exception:
-                # Fallback without assigned_node_id filter (older schema).
-                try:
-                    jobs_res = (
-                        supabase.table("jobs")
-                        .select("*")
-                        .eq("status", "pending")
-                        .order("created_at", desc=False)
-                        .limit(1)
-                        .execute()
-                    )
-                    pending_jobs = jobs_res.data or []
-                except Exception as exc:
-                    logger.warning("Job poll failed: %s", exc)
+            incoming = await websocket.receive_json()
+            msg_type = str(incoming.get("type", "")).lower()
 
-            if not pending_jobs:
-                # No pending jobs — sleep then re-poll.
-                await asyncio.sleep(1)
+            if msg_type == "heartbeat":
+                logger.info("Node %s heartbeat", node_id)
                 continue
 
-            job = pending_jobs[0]
-            job_id = str(job.get("id") or "")
-            if not job_id:
-                await asyncio.sleep(1)
+            if msg_type != "job_result":
+                logger.info("Ignoring WS message type=%s from node_id=%s", msg_type, node_id)
                 continue
 
-            # Atomically claim the job (optimistic: if another node wins the race,
-            # this update will still execute but the node will re-poll next cycle).
-            try:
-                supabase.table("jobs").update({
-                    "assigned_node_id": node_id,
-                    "status": "assigned",
-                }).eq("id", job_id).eq("status", "pending").execute()
-            except Exception as exc:
-                logger.warning(
-                    "Failed to assign job_id=%s to node_id=%s: %s", job_id, node_id, exc
-                )
-                await asyncio.sleep(1)
+            payload = incoming.get("payload") if isinstance(incoming.get("payload"), dict) else incoming
+            completed_job_id = str(payload.get("job_id") or incoming.get("job_id") or "")
+            if not completed_job_id:
+                logger.warning("job_result from node_id=%s missing job_id", node_id)
                 continue
 
-            # Send job to node.
-            try:
-                await websocket.send_json(_build_job_payload(job))
-                logger.info("Job assigned: job_id=%s node_id=%s", job_id, node_id)
-            except Exception as exc:
-                logger.warning("Failed to send job_id=%s to node: %s", job_id, exc)
-                # Revert assignment so another node can pick it up.
-                with suppress(Exception):
-                    supabase.table("jobs").update({
-                        "assigned_node_id": None,
-                        "status": "pending",
-                    }).eq("id", job_id).execute()
-                break
-
-            # Wait for job_result from the node (60 s timeout).
-            try:
-                incoming = await asyncio.wait_for(
-                    websocket.receive_json(), timeout=60.0
-                )
-            except asyncio.TimeoutError:
-                logger.warning(
-                    "Timeout waiting for result: job_id=%s node_id=%s", job_id, node_id
-                )
-                # Revert so job can be retried.
-                with suppress(Exception):
-                    supabase.table("jobs").update({
-                        "assigned_node_id": None,
-                        "status": "pending",
-                    }).eq("id", job_id).execute()
-                continue
-            except WebSocketDisconnect:
-                raise
-            except Exception as exc:
-                logger.warning(
-                    "Error receiving result for job_id=%s: %s", job_id, exc
-                )
-                continue
-
-            # Validate message type.
-            if str(incoming.get("type", "")).lower() != "job_result":
-                logger.info(
-                    "Ignoring non-job_result message (type=%s) from node_id=%s",
-                    incoming.get("type"), node_id,
-                )
-                continue
-
-            completed_job_id = str(incoming.get("job_id") or job_id)
-            output = incoming.get("output")
+            output = payload.get("output")
+            if output is None:
+                output = payload.get("results")
 
             update_payload: dict[str, Any] = {"status": "completed"}
             if output is not None:
@@ -822,21 +1042,15 @@ async def ws_jobs(
                     update_payload["result"] = json.dumps(output)
 
             try:
-                supabase.table("jobs").update(update_payload).eq(
-                    "id", completed_job_id
-                ).execute()
-                logger.info(
-                    "Job completed: job_id=%s node_id=%s", completed_job_id, node_id
-                )
+                supabase.table("jobs").update(update_payload).eq("id", completed_job_id).execute()
+                logger.info("Job completed: job_id=%s node_id=%s", completed_job_id, node_id)
             except Exception as exc:
-                logger.warning(
-                    "Failed to mark job_id=%s completed: %s", completed_job_id, exc
-                )
+                logger.warning("Failed to mark job_id=%s completed: %s", completed_job_id, exc)
 
     except WebSocketDisconnect:
         logger.info("Node disconnected: wallet=%s node_id=%s", wallet, node_id)
     except Exception as exc:
         logger.exception("Unexpected error in ws_jobs for node_id=%s: %s", node_id, exc)
     finally:
-        active_nodes.pop(node_id, None)
+        websocket_connections.pop(node_id, None)
         logger.info("Node removed from active pool: node_id=%s", node_id)
