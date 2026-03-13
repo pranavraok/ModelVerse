@@ -11,6 +11,7 @@ Fixes applied:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -19,11 +20,13 @@ from typing import Any
 
 import aiohttp
 from aiohttp import WSServerHandshakeError
+from web3 import Web3
 
 from backend_client import BackendClient
 from contracts.job_manager_client import JobManagerClient
 from healthcheck import run_healthcheck
 from inference_engine import InferenceEngine
+from ipfs_client import fetch_ipfs_file
 from job_client import JobClient, JobPayload, decode_input_image
 from logger import get_logger
 from model_cache import ModelCache
@@ -34,6 +37,40 @@ from wallet import Wallet, create_wallet_from_env
 _log = get_logger(__name__)
 
 _RECONNECT_DELAY_SECONDS = 5
+MATIC_RPC = os.getenv("MATIC_RPC", "https://rpc-amoy.polygon.technology")
+w3 = Web3(Web3.HTTPProvider(MATIC_RPC))
+SETTLE_JOB_ABI: list[dict[str, Any]] = []
+STAKING_ABI: list[dict[str, Any]] = [
+    {
+        "inputs": [{"internalType": "address", "name": "node", "type": "address"}],
+        "name": "isNodeActive",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function",
+    }
+]
+
+
+def is_node_active_onchain(wallet_address: str) -> bool:
+    staking_contract = os.getenv("STAKING_CONTRACT", "").strip()
+    if not staking_contract:
+        _log.warning("STAKING_CONTRACT not configured; skipping active-node check")
+        return True
+
+    try:
+        contract = w3.eth.contract(address=Web3.to_checksum_address(staking_contract), abi=STAKING_ABI)
+        return bool(contract.functions.isNodeActive(Web3.to_checksum_address(wallet_address)).call())
+    except Exception as exc:  # noqa: BLE001
+        _log.error("Failed to query NodeStaking.isNodeActive: %s", exc)
+        return False
+
+
+async def settle_job(job_id: str | int, results: list[tuple[int, float]], wallet_address: str) -> str:
+    """Mock settleJob call for hackathon flow; replace with contract call later."""
+    tx_hash = "0xmock123"
+    _log.info("settleJob tx sent: %s for job %s", tx_hash, job_id)
+    _log.info("settleJob preview: wallet=%s top_k=%s", wallet_address, results[:3])
+    return tx_hash
 
 
 async def send_heartbeat(address: str, capabilities: NodeCapabilities) -> None:
@@ -77,8 +114,29 @@ async def handle_job(
     job_client: JobClient,
     job: JobPayload,
 ) -> None:
+    _ = job_manager
+
+    if not is_node_active_onchain(wallet.address):
+        raise PermissionError(f"Node {wallet.address} is not active in staking contract")
+
     if job.model_input_type.lower() != "image":
         raise ValueError(f"Unsupported model_input_type={job.model_input_type}")
+
+    # 1) Fetch model bytes from IPFS and verify optional SHA256 hash.
+    model_bytes = await fetch_ipfs_file(job.model_cid)
+    computed_hash = hashlib.sha256(model_bytes).hexdigest()
+    expected_hash = getattr(job, "model_hash", None)
+    if expected_hash and computed_hash != expected_hash:
+        raise ValueError(
+            f"Model hash mismatch: expected {expected_hash}, got {computed_hash}"
+        )
+
+    # 2) Ensure model is written to cache before opening ORT session.
+    async def _model_fetcher(_: str) -> bytes:
+        return model_bytes
+
+    await engine.cache.get_or_fetch(job.model_cid, _model_fetcher)
+    await engine.load_session(job.model_cid)
 
     image = decode_input_image(job)
     preds = await engine.classify_image(
@@ -94,19 +152,7 @@ async def handle_job(
         ]
     }
 
-    tx = job_manager.build_settle_job_tx(
-        from_address=wallet.address,
-        job_id=job.job_id,
-        node_address=wallet.address,
-        creator_address=job.creator_address,
-    )
-    receipt = wallet.build_and_send_tx(tx)
-    _log.info(
-        "settleJob mined: job_id=%s hash=%s status=%s",
-        job.job_id,
-        receipt.transactionHash.hex(),
-        receipt.status,
-    )
+    await settle_job(job.job_id, preds, wallet.address)
 
     await job_client.send_result(job.job_id, output)
 

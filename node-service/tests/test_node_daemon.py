@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from node_capabilities import NodeCapabilities
@@ -9,18 +7,23 @@ from node_daemon import send_heartbeat
 
 
 @pytest.mark.asyncio
-async def test_send_heartbeat_ws_payload(monkeypatch: pytest.MonkeyPatch) -> None:
-    sent_payloads: list[dict] = []
+async def test_send_heartbeat_http_post(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict = {}
 
-    class FakeWS:
+    class FakeResponse:
+        status = 200
+
         async def __aenter__(self):
             return self
 
         async def __aexit__(self, exc_type, exc, tb):
             _ = (exc_type, exc, tb)
 
-        async def send_str(self, payload: str) -> None:
-            sent_payloads.append(json.loads(payload))
+        async def json(self):
+            return {"ok": True}
+
+        async def text(self):
+            return "ok"
 
     class FakeSession:
         async def __aenter__(self):
@@ -29,11 +32,14 @@ async def test_send_heartbeat_ws_payload(monkeypatch: pytest.MonkeyPatch) -> Non
         async def __aexit__(self, exc_type, exc, tb):
             _ = (exc_type, exc, tb)
 
-        def ws_connect(self, url: str, heartbeat: int = 10):
-            _ = (url, heartbeat)
-            return FakeWS()
+        def post(self, url: str, headers: dict[str, str], timeout):
+            seen["url"] = url
+            seen["headers"] = headers
+            _ = timeout
+            return FakeResponse()
 
-    monkeypatch.setenv("COORDINATOR_WS_URL", "ws://example/ws")
+    monkeypatch.setenv("BACKEND_HTTP_URL", "http://example")
+    monkeypatch.setenv("NODE_API_KEY", "test-key")
     monkeypatch.setattr("node_daemon.aiohttp.ClientSession", FakeSession)
 
     capabilities = NodeCapabilities(
@@ -45,9 +51,6 @@ async def test_send_heartbeat_ws_payload(monkeypatch: pytest.MonkeyPatch) -> Non
     )
 
     await send_heartbeat("0x2222222222222222222222222222222222222222", capabilities)
-
-    assert len(sent_payloads) == 1
-    payload = sent_payloads[0]
-    assert payload["type"] == "heartbeat"
-    assert payload["address"] == "0x2222222222222222222222222222222222222222"
-    assert payload["capabilities"]["supported_tasks"] == ["image-classification"]
+    assert seen["url"] == "http://example/api/nodes/heartbeat"
+    assert seen["headers"]["x-wallet-address"] == "0x2222222222222222222222222222222222222222"
+    assert seen["headers"]["x-node-api-key"] == "test-key"

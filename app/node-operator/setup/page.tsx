@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { DashboardHeader } from "@/components/dashboard/header"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,8 +9,30 @@ import { Copy, Terminal, CheckCircle2, Download } from "lucide-react"
 export default function NodeSetupPage() {
   const [copied, setCopied] = useState(false)
 
+  const registration = useMemo(() => {
+    if (typeof window === "undefined") return null
+    try {
+      const raw = localStorage.getItem("modelverse_node_registration")
+      return raw ? JSON.parse(raw) as { node_id: string; api_key: string } : null
+    } catch {
+      return null
+    }
+  }, [])
+
+  const envConfig = useMemo(() => {
+    return [
+      `NODE_ID=${registration?.node_id || ""}`,
+      `API_KEY=${registration?.api_key || ""}`,
+      "WALLET_PRIVATE_KEY=<enter_your_private_key>",
+      "SUPABASE_URL=https://<your-project-ref>.supabase.co",
+      "CONTRACT_ADDRESS=0xYourContractAddress",
+      "STAKING_CONTRACT=0xYourContractAddress",
+      "RPC_URL=https://polygon-mumbai.g.alchemy.com/v2/<your_key>",
+    ].join("\n")
+  }, [registration])
+
   const copyConfig = () => {
-    navigator.clipboard.writeText(`NODE_ID=abc-123\nAPI_KEY=key_xyz\nWALLET_PRIVATE_KEY=\nSUPABASE_URL=https://xyz.supabase.co\nCONTRACT_ADDRESS=0x123...`)
+    navigator.clipboard.writeText(envConfig)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -31,14 +53,20 @@ export default function NodeSetupPage() {
           </h2>
           <Card className="border-border/40 bg-card/30 p-6">
             <div className="flex gap-4">
-              <Button className="flex-1" variant="outline">
+              <Button className="flex-1" variant="outline" asChild>
+                <a href="/node-software.zip" download>
                 <Download className="mr-2 h-4 w-4" /> Mac (Apple Silicon)
+                </a>
               </Button>
-              <Button className="flex-1" variant="outline">
+              <Button className="flex-1" variant="outline" asChild>
+                <a href="/node-software.zip" download>
                 <Download className="mr-2 h-4 w-4" /> Windows (.exe)
+                </a>
               </Button>
-              <Button className="flex-1" variant="outline">
+              <Button className="flex-1" variant="outline" asChild>
+                <a href="/node-software.zip" download>
                 <Download className="mr-2 h-4 w-4" /> Linux (.deb)
+                </a>
               </Button>
             </div>
             <div className="my-6 text-center text-sm text-muted-foreground">OR clone from GitHub</div>
@@ -60,13 +88,11 @@ export default function NodeSetupPage() {
             </Button>
             <p className="text-sm text-muted-foreground mb-4">Create a <code>.env</code> file in the root directory and paste this configuration:</p>
             <pre className="bg-muted p-4 rounded-md text-sm font-mono border border-border/50 text-muted-foreground overflow-x-auto">
-NODE_ID=abc-123<br/>
-API_KEY=key_xyz<br/>
-WALLET_PRIVATE_KEY=&lt;enter_your_private_key&gt;<br/>
-SUPABASE_URL=https://xyz.supabase.co<br/>
-CONTRACT_ADDRESS=0x123...<br/>
-RPC_URL=https://polygon-mumbai.infura.io/v3/YOUR_KEY
+{envConfig}
             </pre>
+            {!registration ? (
+              <p className="text-xs text-primary mt-3">Register your node first to get NODE_ID and API_KEY.</p>
+            ) : null}
             <p className="text-xs text-destructive mt-4 font-medium">Security warning: Never share your private key or API key.</p>
           </Card>
         </div>

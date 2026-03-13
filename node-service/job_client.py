@@ -14,6 +14,9 @@ from typing import Any, Optional
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import aiohttp
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from PIL import Image
 from pydantic import BaseModel, Field
 
@@ -58,23 +61,53 @@ class ResultPayload:
 
 
 class JobPayload(BaseModel):
-    job_id: int
+    job_id: str | int
     model_cid: str
+    model_hash: str | None = None
     model_input_type: str
     input_base64: str = ""
     input_url: str | None = None
     creator_address: str
 
 
+def decrypt_input(encrypted_base64: str, job_id: str | int) -> bytes:
+    """
+    Decrypt input using job_id as salt + node private key.
+    For hackathon mode this is deterministic key derivation.
+    """
+    if not encrypted_base64:
+        raise ValueError("encrypted input_base64 is empty")
+
+    salt = str(job_id).encode()
+    password = os.getenv("NODE_PRIVATE_KEY", os.getenv("WALLET_PRIVATE_KEY", "dummy_key")).encode()
+
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(password))
+
+    try:
+        encrypted_bytes = base64.b64decode(encrypted_base64)
+        fernet = Fernet(key)
+        return fernet.decrypt(encrypted_bytes)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"Failed to decrypt input payload for job_id={job_id}: {exc}") from exc
+
+
 def decode_input_image(job: JobPayload) -> Image.Image:
-    """Decode base64 image into PIL.Image for model inference."""
+    """Decrypt input_base64 and decode it into PIL.Image for model inference."""
     if not job.input_base64:
         raise ValueError("input_base64 missing in job payload")
 
     try:
-        raw = base64.b64decode(job.input_base64)
+        raw = decrypt_input(job.input_base64, job.job_id)
         image = Image.open(io.BytesIO(raw))
         image.load()
+        if image.mode != "RGB":
+            image = image.convert("RGB")
         return image
     except Exception as exc:  # noqa: BLE001
         raise ValueError(f"Failed to decode input image: {exc}") from exc
