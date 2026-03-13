@@ -28,7 +28,6 @@ interface SidebarProps {
 
 const creatorLinks = [
   { name: "Dashboard", href: "/creator", icon: LayoutDashboard },
-  { name: "Marketplace", href: "/marketplace", icon: Store },
   { name: "Upload Model", href: "/creator/upload", icon: Upload },
   { name: "My Models", href: "/creator/models", icon: Package },
   { name: "Analytics", href: "/creator/analytics", icon: BarChart3 },
@@ -83,8 +82,8 @@ export function DashboardSidebar({ role }: SidebarProps) {
         <nav className="flex-1 space-y-1 px-3 py-4">
           {links.map((link) => {
             const isActive = pathname === link.href || 
-              (link.href !== `/${role}` && link.href !== '/marketplace' && pathname.startsWith(link.href)) ||
-              (link.href === '/marketplace' && pathname === '/marketplace')
+              (link.href !== `/${role}` && link.href !== '/marketplace' && pathname.startsWith(link.href)) || 
+              (link.href === '/marketplace' && pathname.startsWith('/marketplace'))
             
             return (
               <Link
