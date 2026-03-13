@@ -39,7 +39,7 @@ export function CTA() {
           
           {/* White Pill Button */}
           <div className="mt-12">
-            <Link href="/signup">
+            <Link href="/select-role">
               <Button size="lg" className="h-14 px-10 rounded-full bg-white text-black hover:bg-gray-200 font-semibold text-base transition-all hover:scale-105 shadow-[0_0_40px_rgba(255,255,255,0.15)]">
                 Get Started
               </Button>

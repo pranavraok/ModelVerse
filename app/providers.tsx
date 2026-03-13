@@ -1,22 +1,16 @@
 "use client";
 
-import * as React from 'react';
+import '@rainbow-me/rainbowkit/styles.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider } from 'wagmi';
-import { polygon, mainnet } from 'wagmi/chains';
-import { getDefaultConfig, RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
-import '@rainbow-me/rainbowkit/styles.css';
-
-const config = getDefaultConfig({
-  appName: 'ModelVerse',
-  projectId: 'YOUR_PROJECT_ID',
-  chains: [polygon, mainnet],
-  ssr: true,
-});
-
-const queryClient = new QueryClient();
+import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
+import { config } from '../lib/wagmi';
+import { useState } from 'react';
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  // We use useState here to prevent data from leaking between users in Next.js
+  const [queryClient] = useState(() => new QueryClient());
+
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>

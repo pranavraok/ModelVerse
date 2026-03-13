@@ -63,8 +63,8 @@ export function DashboardSidebar({ role }: SidebarProps) {
 
   const handleLogout = () => {
     localStorage.removeItem('userRole')
-    localStorage.removeItem('pendingUser')
-    localStorage.setItem('walletDisconnected', 'true') // disconnect wallet on sign out
+    localStorage.removeItem('pendingRole')
+    localStorage.removeItem('accessToken')
     router.push('/')
   }
 

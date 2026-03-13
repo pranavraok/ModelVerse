@@ -1,0 +1,35 @@
+node:
+  # Maximum number of inference jobs this node will process simultaneously
+  max_concurrent_jobs: 3
+  # Model types this node prefers to handle (must match model registry tags)
+  preferred_model_types:
+    - "credit_scoring"
+    - "image_classification"
+    - "tabular_regression"
+  # How often (seconds) to run the internal healthcheck
+  healthcheck_interval_seconds: 30
+
+performance:
+  # Maximum total disk space (MB) that the local model cache may use
+  max_model_cache_mb: 2048
+  # If true, the daemon pre-loads popular models at startup to reduce cold-start latency
+  prewarm_popular_models: false
+
+network:
+  # How often (seconds) the daemon polls the backend for new pending jobs
+  job_poll_interval_seconds: 5
+  # Base backoff (seconds) used for WebSocket / RPC reconnect attempts
+  reconnect_backoff_seconds: 10
+
+capabilities:
+  # Whether this node can run GPU workloads.
+  gpu: false
+  # Available GPU memory in GiB (optional, mostly informative for scheduler).
+  gpu_memory_gb: 0
+  # Task types this node can execute.
+  supported_tasks:
+    - "image-classification"
+  # Hard cap for simultaneous jobs accepted by this node.
+  max_concurrent_jobs: 1
+  # Optional location tag used by backend schedulers.
+  region: "IN-BLR"

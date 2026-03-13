@@ -75,7 +75,7 @@ function SignupForm() {
             </div>
           </Link>
           <h2 className="mt-8 text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
-            Create an account
+            Create {selectedRole ? roleLabels[selectedRole] : ""} account
           </h2>
           <p className="mt-3 text-sm text-muted-foreground">
             Join the decentralized AI economy as a <span className="font-semibold text-primary capitalize">{role.replace('-', ' ')}</span>
@@ -135,6 +135,12 @@ function SignupForm() {
                 Must be at least 8 characters
               </p>
             </div>
+
+            {errorMessage && (
+              <p className="rounded-lg border border-red-400/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {errorMessage}
+              </p>
+            )}
 
             <Button 
               type="submit" 
