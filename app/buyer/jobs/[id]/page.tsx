@@ -59,161 +59,159 @@ export default function JobDetailPage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-transparent bg-mesh relative">
       <DashboardHeader 
-        title={`Job ${params.id}`}
-        subtitle="View job details and results"
+        title={`Mission ${params.id}`}
+        subtitle="Detailed analysis of inference execution"
       />
       
-      <div className="p-6">
+      <div className="relative z-10 p-8">
         {/* Back Button */}
-        <Link href="/buyer/jobs" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Jobs
+        <Link href="/buyer/jobs" className="inline-flex items-center gap-3 text-[10px] font-semibold capitalize tracking-normal text-muted-foreground/40 hover:text-white transition-all mb-10 group">
+          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+          Back to Neural Jobs
         </Link>
 
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-10 lg:grid-cols-3">
           {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-10">
             {/* Job Header */}
-            <Card className="border-border/40 bg-card/30 p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
-                    <Package className="h-7 w-7 text-primary" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold">{jobData.model}</h2>
-                    <p className="text-sm text-muted-foreground">{jobData.id}</p>
-                  </div>
-                </div>
-                <span className="rounded-full bg-accent/20 px-3 py-1 text-sm font-medium text-accent">
-                  Completed
+            <div className="glass-card p-10 border-white/[0.05] relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-8">
+                <span className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-1.5 text-[10px] font-semibold capitalize tracking-normal text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                  Success
                 </span>
               </div>
 
-              <div className="mt-6 grid grid-cols-3 gap-6 border-t border-border/40 pt-6">
-                <div>
-                  <p className="text-xs text-muted-foreground">Cost</p>
-                  <p className="text-lg font-semibold text-primary">{jobData.cost}</p>
+              <div className="flex items-start gap-8">
+                <div className="flex h-20 w-20 items-center justify-center rounded-[1.5rem] bg-primary/10 border border-primary/20 shadow-[0_0_20px_rgba(139,92,246,0.1)]">
+                  <Package className="h-10 w-10 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Latency</p>
-                  <p className="text-lg font-semibold">{jobData.latency}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Completed</p>
-                  <p className="text-lg font-semibold">{jobData.completedAt}</p>
+                  <h2 className="text-4xl font-semibold tracking-tight text-white">{jobData.model}</h2>
+                  <p className="mt-2 text-[10px] font-semibold text-muted-foreground/40 text-neutral-500">{jobData.id}</p>
                 </div>
               </div>
-            </Card>
+
+              <div className="mt-10 grid grid-cols-3 gap-10 border-t border-white/[0.03] pt-10">
+                <div>
+                  <p className="text-[9px] font-semibold text-muted-foreground/30 capitalize tracking-normalr mb-2">Settlement</p>
+                  <p className="text-2xl font-semibold text-primary tracking-tight">{jobData.cost}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-semibold text-muted-foreground/30 capitalize tracking-normalr mb-2">Inference Time</p>
+                  <p className="text-2xl font-semibold text-white tracking-tight">{jobData.latency}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-semibold text-muted-foreground/30 capitalize tracking-normalr mb-2">Completed</p>
+                  <p className="text-xl font-semibold text-white tracking-tight">{jobData.completedAt.split(' ')[1]}</p>
+                  <p className="text-[10px] font-medium text-muted-foreground/40 mt-1">{jobData.completedAt.split(' ')[0]}</p>
+                </div>
+              </div>
+            </div>
 
             {/* Input */}
-            <Card className="border-border/40 bg-card/30 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold">Input Data</h3>
+            <div className="glass-card p-10 border-white/[0.05]">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-2xl font-semibold tracking-tight text-white/95">Neural Input</h3>
                 <button
                   onClick={() => handleCopy(jobData.input)}
-                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                  className="flex items-center gap-3 text-[10px] font-semibold text-neutral-500 text-muted-foreground/40 hover:text-white transition-all group"
                 >
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  {copied ? "Copied!" : "Copy"}
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4 transition-transform group-hover:scale-110" />}
+                  {copied ? "Copied!" : "Copy Manifest"}
                 </button>
               </div>
-              <pre className="rounded-lg bg-muted/50 p-4 text-sm overflow-x-auto">
+              <pre className="rounded-[1.5rem] bg-black/40 border border-white/[0.03] p-8 text-sm overflow-x-auto font-mono text-primary/70 shadow-inner">
                 <code>{jobData.input}</code>
               </pre>
-            </Card>
+            </div>
 
             {/* Output */}
-            <Card className="border-border/40 bg-card/30 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold">Output Result</h3>
-                <Button variant="outline" size="sm" className="border-border/60">
-                  <Download className="mr-2 h-4 w-4" />
-                  Download
+            <div className="glass-card p-10 border-white/[0.05]">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-2xl font-semibold tracking-tight text-white/95">Execution Result</h3>
+                <Button variant="ghost" className="h-10 px-4 rounded-xl bg-white/[0.02] border border-white/[0.05] text-[10px] font-semibold text-neutral-500 text-muted-foreground/60 hover:text-white transition-all">
+                  <Download className="mr-3 h-4 w-4" />
+                  Export Data
                 </Button>
               </div>
-              <pre className="rounded-lg bg-accent/10 border border-accent/20 p-4 text-sm overflow-x-auto">
+              <pre className="rounded-[1.5rem] bg-emerald-500/5 border border-emerald-500/20 p-8 text-sm overflow-x-auto font-mono text-emerald-400 shadow-inner">
                 <code>{jobData.output}</code>
               </pre>
-            </Card>
+            </div>
           </div>
 
           {/* Sidebar - Timeline */}
-          <div className="space-y-6">
+          <div className="space-y-10">
             {/* Timeline */}
-            <Card className="border-border/40 bg-card/30 p-6">
-              <h3 className="font-semibold mb-6">Job Timeline</h3>
+            <div className="glass-card p-10 border-white/[0.05]">
+              <h3 className="text-2xl font-semibold tracking-tight text-white/95 mb-10">Mission Timeline</h3>
               <div className="relative">
                 {/* Progress line */}
-                <div className="absolute left-4 top-0 h-full w-0.5 bg-border" />
+                <div className="absolute left-5 top-0 h-full w-[1px] bg-white/5" />
                 <div 
-                  className="absolute left-4 top-0 w-0.5 bg-accent transition-all duration-1000"
+                  className="absolute left-5 top-0 w-[1px] bg-emerald-500 transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
                   style={{ height: `${progress}%` }}
                 />
                 
-                <div className="space-y-6">
+                <div className="space-y-10">
                   {timeline.map((step, index) => (
-                    <div key={index} className="relative flex items-start gap-4 pl-10">
-                      <div className={`absolute left-2 flex h-5 w-5 items-center justify-center rounded-full ${
-                        step.completed ? 'bg-accent' : 'bg-muted'
-                      }`}>
-                        {step.completed ? (
-                          <CheckCircle className="h-3 w-3 text-accent-foreground" />
-                        ) : (
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                        )}
-                      </div>
+                    <div key={index} className="relative flex items-start gap-8 pl-14">
+                      <div className={`absolute left-[13px] flex h-4 w-4 items-center justify-center rounded-full border transition-all duration-500 ${
+                        step.completed ? 'bg-emerald-500 border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'bg-white/5 border-white/[0.05]'
+                      }`} />
                       <div>
-                        <p className={`text-sm font-medium ${step.completed ? '' : 'text-muted-foreground'}`}>
+                        <p className={`text-sm font-semibold tracking-tight ${step.completed ? 'text-white' : 'text-muted-foreground/30'}`}>
                           {step.status}
                         </p>
-                        <p className="text-xs text-muted-foreground">{step.time}</p>
+                        <p className="text-[10px] font-semibold text-muted-foreground/20 text-neutral-500 mt-1 italic">{step.time}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-            </Card>
+            </div>
 
             {/* Transaction Info */}
-            <Card className="border-border/40 bg-card/30 p-6">
-              <h3 className="font-semibold mb-4">Transaction</h3>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">Transaction Hash</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <code className="text-sm truncate">{jobData.txHash}</code>
-                    <button className="text-primary hover:text-primary/90">
+            <div className="glass-card p-10 border-white/[0.05]">
+              <h3 className="text-xl font-semibold tracking-tight text-white/95 mb-6">On-Chain Evidence</h3>
+              <div className="space-y-6">
+                <div className="p-6 rounded-[1.5rem] bg-white/[0.01] border border-white/5">
+                  <p className="text-[9px] font-semibold text-muted-foreground/30 text-neutral-500 italic mb-2">Transaction Hash</p>
+                  <div className="flex items-center gap-4">
+                    <code className="text-[11px] font-mono text-primary/70 truncate flex-1">{jobData.txHash}</code>
+                    <button className="text-muted-foreground/40 hover:text-white hover:scale-110 transition-all">
                       <ExternalLink className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Wallet className="h-4 w-4" />
-                  <span>Payment released to creator</span>
+                <div className="flex items-center gap-4 text-[10px] font-semibold text-neutral-500 text-muted-foreground/30">
+                  <div className="p-2 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
+                    <Wallet className="h-4 w-4 text-emerald-500/40" />
+                  </div>
+                  <span>Escrow Settlement Complete</span>
                 </div>
               </div>
-            </Card>
+            </div>
 
             {/* Actions */}
-            <Card className="border-border/40 bg-card/30 p-6">
-              <h3 className="font-semibold mb-4">Actions</h3>
-              <div className="space-y-3">
-                <Link href={`/marketplace/${jobData.modelId}/run`} className="w-full">
-                  <Button className="w-full bg-primary hover:bg-primary/90">
-                    <Play className="mr-2 h-4 w-4" />
-                    Run Again
+            <div className="glass-card p-10 border-white/[0.05] shadow-[0_20px_40px_rgba(0,0,0,0.3)]">
+              <h3 className="text-xl font-semibold tracking-tight text-white/95 mb-8">Post-Action</h3>
+              <div className="space-y-4">
+                <Link href={`/marketplace/${jobData.modelId}/run`} className="block">
+                  <Button className="w-full h-14 bg-primary text-white hover:bg-primary/90 font-semibold capitalize tracking-normal text-[11px] rounded-2xl shadow-[0_10px_30px_rgba(139,92,246,0.2)] group">
+                    <Play className="mr-3 h-4 w-4 fill-current transition-transform group-hover:scale-110" />
+                    Re-Execute Job
                   </Button>
                 </Link>
-                <Link href={`/marketplace/${jobData.modelId}`} className="w-full">
-                  <Button variant="outline" className="w-full border-border/60">
-                    View Model
+                <Link href={`/marketplace/${jobData.modelId}`} className="block">
+                  <Button variant="ghost" className="w-full h-14 border border-white/[0.03] hover:bg-white/5 text-[11px] font-semibold text-neutral-500 text-muted-foreground/40 hover:text-white rounded-2xl transition-all">
+                    Model Blueprint
                   </Button>
                 </Link>
               </div>
-            </Card>
+            </div>
           </div>
         </div>
       </div>
