@@ -80,6 +80,32 @@ alter table if exists jobs add column if not exists updated_at timestamptz defau
 create unique index if not exists idx_jobs_job_id_unique on jobs(job_id);
 create unique index if not exists idx_jobs_id_unique on jobs(id);
 
+-- Model on-chain linkage compatibility.
+alter table if exists models add column if not exists chain_model_id bigint;
+alter table if exists models add column if not exists register_tx_hash text;
+
+-- Price compatibility across schema variants.
+alter table if exists models add column if not exists price numeric;
+alter table if exists models add column if not exists price_per_inference numeric;
+alter table if exists models add column if not exists inference_price numeric;
+alter table if exists models add column if not exists price_matic numeric;
+
+update models
+set price = coalesce(price, price_per_inference, inference_price, price_matic)
+where price is null;
+
+update models
+set price_per_inference = coalesce(price_per_inference, price, inference_price, price_matic)
+where price_per_inference is null;
+
+update models
+set inference_price = coalesce(inference_price, price, price_per_inference, price_matic)
+where inference_price is null;
+
+update models
+set price_matic = coalesce(price_matic, price, price_per_inference, inference_price)
+where price_matic is null;
+
 create table if not exists job_bids (
   bid_id uuid primary key default gen_random_uuid(),
   job_id uuid not null references jobs(job_id) on delete cascade,

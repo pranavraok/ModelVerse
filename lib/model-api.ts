@@ -35,6 +35,20 @@ function asText(value: unknown, fallback = ""): string {
   return String(value)
 }
 
+function resolvePrice(row: Record<string, unknown>): number {
+  const candidates = [
+    asNumber(row.price, Number.NaN),
+    asNumber(row.price_per_inference, Number.NaN),
+    asNumber(row.inference_price, Number.NaN),
+    asNumber(row.price_matic, Number.NaN),
+  ].filter((value) => Number.isFinite(value))
+
+  const positive = candidates.find((value) => value > 0)
+  if (positive != null) return positive
+  if (candidates.length > 0) return candidates[0]
+  return 0
+}
+
 function normalizeModel(row: Record<string, unknown>): MarketplaceModel {
   const creatorWallet = asText(
     row.creator_wallet ??
@@ -51,11 +65,11 @@ function normalizeModel(row: Record<string, unknown>): MarketplaceModel {
     description: asText(row.description, "No description provided."),
     category: asText(row.category, "other"),
     creatorWallet,
-    price: asNumber(row.price ?? row.price_per_inference, 0),
+    price: resolvePrice(row),
     rating: asNumber(row.rating, 0),
     jobs: asNumber(row.jobs ?? row.job_count ?? row.total_jobs ?? row.usage_count, 0),
     trustScore: asNumber(row.trust_score, 0),
-    chainModelId: asNumber(row.chain_model_id, 0),
+    chainModelId: row.chain_model_id == null ? undefined : asNumber(row.chain_model_id, 0),
     sampleInput: asText(row.sample_input, ""),
     expectedOutput: asText(row.expected_output, ""),
     createdAt: asText(row.created_at ?? row.createdAt, ""),
