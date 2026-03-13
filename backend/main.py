@@ -4,15 +4,14 @@ import json
 import asyncio
 import logging
 import base64
-import urllib.request
-import urllib.error
+import subprocess
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Literal
 from contextlib import suppress
-from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect, status, File, Form, UploadFile
+from fastapi import Depends, FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -81,7 +80,6 @@ active_nodes: Dict[str, WebSocket] = {}
 _DUMMY_INPUT_BASE64 = (
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 )
-_PINATA_PIN_FILE_URL = "https://api.pinata.cloud/pinning/pinFileToIPFS"
 
 
 # ─────────────────────────── Pydantic models ────────────────────────────────
@@ -269,124 +267,6 @@ def _build_job_payload(job_row: dict[str, Any]) -> dict[str, Any]:
             "creator_address": _extract_creator_wallet(job_row),
         },
     }
-
-
-def _encode_multipart_with_file(
-    fields: dict[str, str],
-    file_field_name: str,
-    filename: str,
-    file_bytes: bytes,
-    content_type: str,
-) -> tuple[bytes, str]:
-    boundary = f"----ModelVerseBoundary{uuid.uuid4().hex}"
-    body = bytearray()
-
-    for key, value in fields.items():
-        body.extend(f"--{boundary}\r\n".encode("utf-8"))
-        body.extend(
-            f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode("utf-8")
-        )
-        body.extend(str(value).encode("utf-8"))
-        body.extend(b"\r\n")
-
-    body.extend(f"--{boundary}\r\n".encode("utf-8"))
-    body.extend(
-        (
-            f'Content-Disposition: form-data; name="{file_field_name}"; '
-            f'filename="{filename}"\r\n'
-        ).encode("utf-8")
-    )
-    body.extend(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
-    body.extend(file_bytes)
-    body.extend(b"\r\n")
-    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
-
-    return bytes(body), boundary
-
-
-def _upload_file_to_pinata(
-    *,
-    filename: str,
-    file_bytes: bytes,
-    content_type: str,
-    metadata: dict[str, Any],
-) -> str:
-    pinata_jwt = os.getenv("PINATA_JWT") or os.getenv("NEXT_PUBLIC_PINATA_JWT")
-    if not pinata_jwt:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Missing PINATA_JWT in backend environment",
-        )
-
-    fields = {
-        "pinataMetadata": json.dumps(metadata),
-        "pinataOptions": json.dumps({"cidVersion": 1}),
-    }
-    body, boundary = _encode_multipart_with_file(
-        fields=fields,
-        file_field_name="file",
-        filename=filename,
-        file_bytes=file_bytes,
-        content_type=content_type,
-    )
-
-    request = urllib.request.Request(
-        _PINATA_PIN_FILE_URL,
-        data=body,
-        method="POST",
-        headers={
-            "Authorization": f"Bearer {pinata_jwt}",
-            "Content-Type": f"multipart/form-data; boundary={boundary}",
-        },
-    )
-
-    try:
-        with urllib.request.urlopen(request, timeout=35) as response:
-            raw = response.read().decode("utf-8")
-            payload = json.loads(raw)
-    except urllib.error.HTTPError as exc:
-        error_body = ""
-        with suppress(Exception):
-            error_body = exc.read().decode("utf-8")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Pinata upload failed: {error_body or str(exc)}",
-        ) from exc
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Pinata upload failed: {exc}",
-        ) from exc
-
-    cid = str(payload.get("IpfsHash") or "").strip()
-    if not cid:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Pinata response did not include IpfsHash",
-        )
-    return cid
-
-
-def _try_insert_model_rows(candidates: list[dict[str, Any]]) -> dict[str, Any]:
-    last_error: Exception | None = None
-    for payload in candidates:
-        try:
-            response = supabase.table("models").insert(payload).execute()
-            if response.data:
-                return response.data[0]
-        except Exception as exc:
-            text = str(exc).lower()
-            if "duplicate" in text and "ipfs_cid" in text:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="This file is already registered (duplicate ipfs_cid)",
-                ) from exc
-            last_error = exc
-
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=f"Failed to insert model into Supabase: {last_error}",
-    )
 
 
 # ─────────────────────────── WebSocket helpers ──────────────────────────────
@@ -633,150 +513,125 @@ def list_models_api(
     }
 
 
-@app.post("/api/models/upload")
-def upload_model_to_ipfs_and_db(
-    name: str = Form(...),
-    description: str = Form(default=""),
-    category: str = Form(default="other"),
-    sample_input: str = Form(default=""),
-    expected_output: str = Form(default=""),
-    price: str = Form(default="0"),
-    model_file: UploadFile = File(...),
-    current_user: dict[str, Any] = Depends(get_current_user),
-):
-    wallet = str(current_user.get("wallet") or "").strip().lower()
-    if not wallet:
-        raise HTTPException(status_code=401, detail="Missing creator wallet")
-
-    filename = (model_file.filename or "model.bin").strip()
-    ext = Path(filename).suffix.lower()
-    if ext not in {".onnx", ".tflite"}:
-        raise HTTPException(status_code=400, detail="Only .onnx and .tflite files are allowed")
-
-    file_bytes = model_file.file.read()
-    if not file_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty")
-    if len(file_bytes) > 100 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File exceeds 100MB limit")
-
-    content_type = model_file.content_type or "application/octet-stream"
-    cid = _upload_file_to_pinata(
-        filename=filename,
-        file_bytes=file_bytes,
-        content_type=content_type,
-        metadata={
-            "name": name,
-            "keyvalues": {
-                "creator_wallet": wallet,
-                "category": category,
-                "filename": filename,
-            },
-        },
-    )
-
-    parsed_price = 0.0
-    with suppress(Exception):
-        parsed_price = float(price)
-
-    base_payload = {
-        "ipfs_cid": cid,
-        "description": description,
-        "category": category,
-        "status": "active",
-        "sample_input": sample_input,
-        "expected_output": expected_output,
-    }
-
-    candidates = [
-        {
-            **base_payload,
-            "name": name,
-            "creator_wallet": wallet,
-            "price_matic": parsed_price,
-            "file_name": filename,
-        },
-        {
-            **base_payload,
-            "model_name": name,
-            "creator_wallet": wallet,
-            "price": parsed_price,
-            "file_name": filename,
-        },
-        {
-            **base_payload,
-            "name": name,
-            "creator_address": wallet,
-            "price_matic": parsed_price,
-            "file_name": filename,
-        },
-        {
-            **base_payload,
-            "model_name": name,
-            "creator_address": wallet,
-            "price": parsed_price,
-            "file_name": filename,
-        },
-        {
-            **base_payload,
-            "creator_wallet": wallet,
-        },
-        {
-            **base_payload,
-            "creator_address": wallet,
-        },
-        base_payload,
-    ]
-
-    inserted = _try_insert_model_rows(candidates)
-    gateway = os.getenv("PINATA_GATEWAY_URL", "https://gateway.pinata.cloud/ipfs/").rstrip("/")
-
-    return {
-        "message": "Model uploaded and stored successfully",
-        "ipfs_cid": cid,
-        "ipfs_url": f"{gateway}/{cid}",
-        "model": inserted,
-    }
-
-
 # ─────────────────────────── Node routes ────────────────────────────────────
 
-@app.post("/api/nodes/register")
-def register_node(current_user: dict[str, Any] = Depends(get_current_user)):
-    wallet = current_user["wallet"]
-    api_key = str(uuid.uuid4())
-    generated_node_id = str(uuid.uuid4())
+class RegisterNodeRequest(BaseModel):
+    node_name: str | None = None
 
-    row = None
-    payload = {
-        "id": generated_node_id,
-        "wallet": wallet,
-        "api_key": api_key,
-        "status": "active",
+
+def _find_existing_node(wallet: str) -> dict[str, Any] | None:
+    """Return the existing active node row for this wallet, or None."""
+    for wallet_col in ("wallet", "wallet_address", "operator_wallet"):
+        try:
+            resp = (
+                supabase.table("nodes")
+                .select("*")
+                .eq(wallet_col, wallet)
+                .eq("status", "active")
+                .limit(1)
+                .execute()
+            )
+            if resp.data:
+                return resp.data[0]
+        except Exception:
+            continue
+    return None
+
+
+@app.post("/api/nodes/register")
+def register_node(
+    body: RegisterNodeRequest | None = None,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Idempotent node registration.
+    - If the wallet already has an active node row, return it (don't create duplicates).
+    - Otherwise insert a new row with node_name, reputation_score, total_jobs_completed.
+    - Accepts optional JSON body: { "node_name": "My Node" }
+    """
+    wallet = current_user["wallet"]
+    node_name = (body.node_name if body else None) or f"Node-{wallet[:6]}"
+
+    # ── idempotency: return existing node if found ────────────────────────────
+    existing = _find_existing_node(wallet)
+    if existing:
+        return {
+            "node_id":            existing.get("id"),
+            "api_key":            existing.get("api_key"),
+            "node_name":          existing.get("node_name", node_name),
+            "reputation_score":   existing.get("reputation_score", 0.5),
+            "total_jobs_completed": existing.get("total_jobs_completed", 0),
+            "status":             existing.get("status", "active"),
+        }
+
+    # ── new registration ──────────────────────────────────────────────────────
+    new_id  = str(uuid.uuid4())
+    api_key = str(uuid.uuid4())
+
+    base_payload: dict[str, Any] = {
+        "id":                   new_id,
+        "api_key":              api_key,
+        "status":               "active",
+        "node_name":            node_name,
+        "reputation_score":     0.5,
+        "total_jobs_completed": 0,
     }
 
-    try:
-        response = supabase.table("nodes").insert(payload).execute()
-        if response.data:
-            row = response.data[0]
-    except Exception:
-        # Fallback for alternative wallet column naming.
-        fallback_payload = {
-            "id": generated_node_id,
-            "operator_wallet": wallet,
-            "api_key": api_key,
-            "status": "active",
-        }
-        response = supabase.table("nodes").insert(fallback_payload).execute()
-        if response.data:
-            row = response.data[0]
+    row: dict[str, Any] | None = None
+    for wallet_col in ("wallet", "operator_wallet"):
+        try:
+            resp = supabase.table("nodes").insert({**base_payload, wallet_col: wallet}).execute()
+            if resp.data:
+                row = resp.data[0]
+                break
+        except Exception:
+            continue
 
     if not row:
-        return {"node_id": generated_node_id, "api_key": api_key}
+        # Last-resort: return generated values without a DB row
+        return {
+            "node_id":              new_id,
+            "api_key":              api_key,
+            "node_name":            node_name,
+            "reputation_score":     0.5,
+            "total_jobs_completed": 0,
+            "status":               "active",
+        }
 
     return {
-        "node_id": row.get("id", generated_node_id),
-        "api_key": row.get("api_key", api_key),
+        "node_id":              row.get("id", new_id),
+        "api_key":              row.get("api_key", api_key),
+        "node_name":            row.get("node_name", node_name),
+        "reputation_score":     row.get("reputation_score", 0.5),
+        "total_jobs_completed": row.get("total_jobs_completed", 0),
+        "status":               row.get("status", "active"),
     }
+
+
+@app.get("/api/nodes")
+def list_nodes(current_user: dict[str, Any] = Depends(get_current_user)):
+    """
+    Return all active nodes owned by the connected wallet.
+    Called by the frontend nodes/page.tsx on load.
+    """
+    wallet = current_user["wallet"]
+    rows: list[dict[str, Any]] = []
+
+    for wallet_col in ("wallet", "wallet_address", "operator_wallet"):
+        try:
+            resp = (
+                supabase.table("nodes")
+                .select("*")
+                .eq(wallet_col, wallet)
+                .execute()
+            )
+            if resp.data:
+                rows = resp.data
+                break
+        except Exception:
+            continue
+
+    return {"items": rows, "count": len(rows)}
 
 
 @app.post("/api/nodes/heartbeat")
@@ -808,6 +663,247 @@ async def node_heartbeat(current_user: dict[str, Any] = Depends(get_current_user
         "updated_last_seen": updated,
     }
 
+class AutoRegisterRequest(BaseModel):
+    node_name: str | None = None
+    stake_tx_hash: str | None = None
+    stake_matic: float | None = None
+ 
+ 
+# ─────────────────────────── /api/nodes/auto-register ───────────────────────
+ 
+@app.post("/api/nodes/auto-register")
+def auto_register_node(
+    body: AutoRegisterRequest | None = None,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Idempotent node auto-registration called directly from sign-in/sign-up.
+ 
+    Flow:
+      1. Check if this wallet already has an active node row → return it (no duplicate).
+      2. If not, insert a new row (tries 'wallet' column, falls back to 'operator_wallet').
+      3. Returns { node_id, api_key, node_name, status }.
+ 
+    This is identical in behaviour to /api/nodes/register but accepts the richer
+    body the frontend sends (node_name, stake_tx_hash, stake_matic) so the
+    frontend does NOT need to be changed.
+    """
+    wallet = current_user["wallet"]
+    node_name = (body.node_name if body else None) or f"Node-{wallet[:6]}"
+ 
+    # ── idempotency: return existing node unchanged ───────────────────────
+    existing = _find_existing_node(wallet)
+    if existing:
+        logger.info("auto-register: returning existing node for wallet=%s", wallet)
+        return {
+            "node_id":              existing.get("id"),
+            "api_key":              existing.get("api_key"),
+            "node_name":            existing.get("node_name", node_name),
+            "reputation_score":     existing.get("reputation_score", 0.5),
+            "total_jobs_completed": existing.get("total_jobs_completed", 0),
+            "status":               existing.get("status", "active"),
+        }
+ 
+    # ── new registration ──────────────────────────────────────────────────
+    new_id  = str(uuid.uuid4())
+    api_key = str(uuid.uuid4())
+ 
+    base_payload: dict[str, Any] = {
+        "id":                   new_id,
+        "api_key":              api_key,
+        "status":               "active",
+        "node_name":            node_name,
+        "reputation_score":     0.5,
+        "total_jobs_completed": 0,
+    }
+ 
+    # Optionally store stake metadata if columns exist (non-fatal if they don't).
+    if body:
+        if body.stake_tx_hash:
+            base_payload["stake_tx_hash"] = body.stake_tx_hash
+        if body.stake_matic is not None:
+            base_payload["stake_matic"] = body.stake_matic
+ 
+    row: dict[str, Any] | None = None
+    for wallet_col in ("wallet", "operator_wallet"):
+        try:
+            resp = supabase.table("nodes").insert(
+                {**base_payload, wallet_col: wallet}
+            ).execute()
+            if resp.data:
+                row = resp.data[0]
+                break
+        except Exception as exc:
+            logger.debug("auto-register insert failed for col=%s: %s", wallet_col, exc)
+            continue
+ 
+    if not row:
+        # Graceful degradation: return generated values without a confirmed DB row.
+        logger.warning("auto-register: DB insert failed for wallet=%s; returning ephemeral creds", wallet)
+        return {
+            "node_id":              new_id,
+            "api_key":              api_key,
+            "node_name":            node_name,
+            "reputation_score":     0.5,
+            "total_jobs_completed": 0,
+            "status":               "active",
+        }
+ 
+    logger.info("auto-register: new node created node_id=%s wallet=%s", new_id, wallet)
+    return {
+        "node_id":              row.get("id", new_id),
+        "api_key":              row.get("api_key", api_key),
+        "node_name":            row.get("node_name", node_name),
+        "reputation_score":     row.get("reputation_score", 0.5),
+        "total_jobs_completed": row.get("total_jobs_completed", 0),
+        "status":               row.get("status", "active"),
+    }
+ 
+ 
+# ─────────────────────────── /api/nodes/deactivate ──────────────────────────
+ 
+@app.post("/api/nodes/deactivate")
+def deactivate_node(
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Called on logout. Marks the node row as inactive so it stops receiving jobs.
+    The frontend also calls /api/docker/stop separately.
+    """
+    wallet = current_user["wallet"]
+    updated = False
+ 
+    for wallet_col in ("wallet", "wallet_address", "operator_wallet"):
+        try:
+            resp = (
+                supabase.table("nodes")
+                .update({"status": "inactive", "is_active": False})
+                .eq(wallet_col, wallet)
+                .execute()
+            )
+            if resp.data:
+                updated = True
+                break
+        except Exception:
+            continue
+ 
+    logger.info("deactivate_node: wallet=%s updated=%s", wallet, updated)
+    return {"status": "deactivated", "wallet": wallet, "updated": updated}
+ 
+ 
+# ─────────────────────────── /api/docker/start ──────────────────────────────
+ 
+# Resolve the node-service directory relative to this file:
+#   backend/main.py  →  ../node-service
+_NODE_SERVICE_DIR = (Path(__file__).resolve().parent.parent / "node-service").resolve()
+ 
+ 
+def _docker_available() -> bool:
+    return shutil.which("docker") is not None
+ 
+ 
+@app.post("/api/docker/start")
+def docker_start(
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Starts the node-service Docker container in the background.
+    Reads WALLET_ADDRESS from the authenticated user so the container
+    self-configures via entrypoint.sh → node_daemon.py.
+ 
+    Non-fatal if Docker is not installed (returns a warning instead of 500).
+    """
+    wallet = current_user["wallet"]
+ 
+    if not _docker_available():
+        logger.warning("docker/start called but Docker is not installed on this machine")
+        return {
+            "status": "skipped",
+            "reason": "Docker not found on this server. Start the daemon manually.",
+            "wallet": wallet,
+        }
+ 
+    if not _NODE_SERVICE_DIR.exists():
+        logger.warning("docker/start: node-service directory not found at %s", _NODE_SERVICE_DIR)
+        return {
+            "status": "skipped",
+            "reason": f"node-service directory not found at {_NODE_SERVICE_DIR}",
+            "wallet": wallet,
+        }
+ 
+    # Pass the wallet address as an env override so entrypoint.sh can fetch
+    # the node_id and api_key from Supabase automatically.
+    env = {
+        **os.environ,
+        "WALLET_ADDRESS": wallet,
+    }
+ 
+    try:
+        result = subprocess.run(
+            ["docker", "compose", "up", "-d", "--build"],
+            cwd=str(_NODE_SERVICE_DIR),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,   # 2-minute build timeout
+        )
+        if result.returncode != 0:
+            logger.error("docker compose up failed:\n%s\n%s", result.stdout, result.stderr)
+            return {
+                "status": "error",
+                "reason": result.stderr[:500] or result.stdout[:500],
+                "wallet": wallet,
+            }
+ 
+        logger.info("docker/start: container started for wallet=%s", wallet)
+        return {"status": "started", "wallet": wallet}
+ 
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "reason": "docker compose up timed out (>120s)", "wallet": wallet}
+    except Exception as exc:
+        logger.exception("docker/start unexpected error: %s", exc)
+        return {"status": "error", "reason": str(exc), "wallet": wallet}
+ 
+ 
+# ─────────────────────────── /api/docker/stop ───────────────────────────────
+ 
+@app.post("/api/docker/stop")
+def docker_stop(
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Stops the node-service Docker container. Called on logout.
+    Non-fatal if Docker is not installed or container is already stopped.
+    """
+    wallet = current_user["wallet"]
+ 
+    if not _docker_available():
+        return {"status": "skipped", "reason": "Docker not found", "wallet": wallet}
+ 
+    if not _NODE_SERVICE_DIR.exists():
+        return {"status": "skipped", "reason": "node-service dir not found", "wallet": wallet}
+ 
+    try:
+        result = subprocess.run(
+            ["docker", "compose", "down"],
+            cwd=str(_NODE_SERVICE_DIR),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            logger.warning("docker compose down warning:\n%s\n%s", result.stdout, result.stderr)
+            # Non-fatal — container may already be stopped.
+ 
+        logger.info("docker/stop: container stopped for wallet=%s", wallet)
+        return {"status": "stopped", "wallet": wallet}
+ 
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "reason": "docker compose down timed out", "wallet": wallet}
+    except Exception as exc:
+        logger.exception("docker/stop unexpected error: %s", exc)
+        return {"status": "error", "reason": str(exc), "wallet": wallet}
+ 
 
 # ─────────────────────────── Jobs route ─────────────────────────────────────
 

@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import { DashboardHeader } from "@/components/dashboard/header"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { 
   Play, 
@@ -13,7 +12,8 @@ import {
   ArrowDownRight,
   Store,
   RefreshCw,
-  AlertCircle
+  Activity,
+  TrendingUp
 } from "lucide-react"
 
 const stats = [
@@ -23,7 +23,7 @@ const stats = [
     change: "+8",
     trend: "up",
     icon: Play,
-    color: "from-primary/20 to-primary/5"
+    color: "from-primary/10 to-transparent"
   },
   {
     title: "Active Jobs",
@@ -31,7 +31,7 @@ const stats = [
     change: "Running",
     trend: "neutral",
     icon: RefreshCw,
-    color: "from-chart-4/20 to-chart-4/5"
+    color: "from-chart-4/10 to-transparent"
   },
   {
     title: "Total Spent",
@@ -39,7 +39,7 @@ const stats = [
     change: "+2.3",
     trend: "up",
     icon: Wallet,
-    color: "from-accent/20 to-accent/5"
+    color: "from-accent/10 to-transparent"
   },
   {
     title: "Average Job Cost",
@@ -47,7 +47,7 @@ const stats = [
     change: "-5%",
     trend: "down",
     icon: CheckCircle,
-    color: "from-chart-3/20 to-chart-3/5"
+    color: "from-chart-3/10 to-transparent"
   }
 ]
 
@@ -122,154 +122,177 @@ const recommendedModels = [
 
 export default function BuyerDashboard() {
   return (
-    <div className="min-h-screen pb-12">
-      <DashboardHeader 
-        title="Dashboard" 
-        subtitle="Monitor your AI inference jobs"
-      />
-      
-      <div className="p-6">
-        {/* Stats Grid */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => (
-            <Card key={stat.title} className="relative overflow-hidden border-border/40 bg-card/30 p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{stat.title}</p>
-                  <p className="mt-2 text-2xl font-bold">{stat.value}</p>
-                  <div className={`mt-1 flex items-center text-xs ${
-                    stat.trend === 'up' ? 'text-accent' 
-                    : stat.trend === 'down' ? 'text-destructive'
-                    : 'text-chart-4'
-                  }`}>
-                    {stat.trend === 'up' ? (
-                      <ArrowUpRight className="mr-0.5 h-3 w-3" />
-                    ) : stat.trend === 'down' ? (
-                      <ArrowDownRight className="mr-0.5 h-3 w-3" />
-                    ) : (
-                      <Clock className="mr-0.5 h-3 w-3" />
-                    )}
-                    {stat.change}
-                  </div>
-                </div>
-                <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-linear-to-br ${stat.color}`}>
-                  <stat.icon className={`h-5 w-5 ${stat.title === 'Active Jobs' ? 'animate-spin' : ''}`} />
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+    <div className="min-h-screen pb-12 bg-transparent bg-mesh relative">
+      {/* Background Auroras - Synchronized with Landing Page */}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+        <div className="aurora-1" />
+        <div className="aurora-2" />
+      </div>
 
-        {/* Quick Actions */}
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <Link href="/marketplace">
-            <Card className="group flex cursor-pointer items-center gap-4 border-border/40 bg-linear-to-br from-primary/10 to-primary/5 p-6 transition-all hover:border-primary/40">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/20">
-                <Store className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Browse Marketplace</h3>
-                <p className="text-sm text-muted-foreground">Find AI models to run</p>
-              </div>
-              <ArrowUpRight className="ml-auto h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
-            </Card>
-          </Link>
-          <Link href="/buyer/jobs">
-            <Card className="group flex cursor-pointer items-center gap-4 border-border/40 bg-linear-to-br from-accent/10 to-accent/5 p-6 transition-all hover:border-accent/40">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/20">
-                <Play className="h-6 w-6 text-accent" />
-              </div>
-              <div>
-                <h3 className="font-semibold">View All Jobs</h3>
-                <p className="text-sm text-muted-foreground">Track job progress</p>
-              </div>
-              <ArrowUpRight className="ml-auto h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
-            </Card>
-          </Link>
-        </div>
-
-        <div className="mt-6">
-          {/* Active Jobs */}
-          <Card className="border-border/40 bg-card/30 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold">Active Jobs</h2>
-              <span className="rounded-full bg-chart-4/20 px-2 py-1 text-xs font-medium text-chart-4">
-                {activeJobs.filter(j => ['running', 'assigned', 'pending'].includes(j.status)).length} active
-              </span>
-            </div>
-            <div className="space-y-4">
-              {activeJobs.map((job) => (
-                <Link key={job.id} href={`/buyer/jobs/${job.id}`}>
-                  <div className="rounded-xl border border-border/40 bg-muted/30 p-4 transition-all hover:border-primary/40 hover:bg-muted/50 mb-4 cursor-pointer">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <p className="font-medium">{job.model}</p>
-                        <p className="text-xs text-muted-foreground">{job.id}</p>
-                      </div>
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium capitalize ${
-                        job.status === 'running' ? 'bg-primary/20 text-primary'
-                        : job.status === 'assigned' ? 'bg-accent/20 text-accent'
-                        : job.status === 'completed' ? 'bg-green-500/20 text-green-500'
-                        : job.status === 'failed' ? 'bg-destructive/20 text-destructive'
-                        : 'bg-chart-4/20 text-chart-4'
-                      }`}>
-                        {job.status}
-                      </span>
+      <div className="relative z-10">
+        <DashboardHeader 
+          title="Command Center" 
+          subtitle="Orchestrate your decentralized AI operations"
+        />
+        
+        <div className="p-8 max-w-[1600px] mx-auto space-y-10">
+          {/* Stats Grid */}
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {stats.map((stat) => (
+              <div key={stat.title} className="glass-card premium-glow glow-primary p-7 transition-all duration-500 hover:translate-y-[-4px] group bg-white/[0.01] border-border/50">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-300 capitalize tracking-normal">{stat.title}</p>
+                    <p className="mt-4 text-4xl font-semibold tracking-normal text-white shadow-none">{stat.value}</p>
+                    <div className={`mt-4 flex items-center text-xs font-semibold capitalize tracking-[0.15em] ${
+                      stat.trend === 'up' ? 'text-primary' 
+                      : stat.trend === 'down' ? 'text-destructive'
+                      : 'text-chart-4'
+                    }`}>
+                      {stat.trend === 'up' ? (
+                        <ArrowUpRight className="mr-1.5 h-3.5 w-3.5" />
+                      ) : stat.trend === 'down' ? (
+                        <ArrowDownRight className="mr-1.5 h-3.5 w-3.5" />
+                      ) : (
+                        <Clock className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      {stat.change}
                     </div>
-                    <div className="mt-3">
-                      <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                        <span>Progress</span>
-                        <span>{job.progress}%</span>
-                      </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                        <div 
-                          className={`h-full transition-all duration-500 ${
-                            job.status === 'failed' ? 'bg-destructive'
-                            : job.status === 'completed' ? 'bg-green-500'
-                            : job.status === 'assigned' ? 'bg-accent'
-                            : 'bg-primary'
-                          }`}
-                          style={{ width: `${job.progress}%` }}
-                        />
-                      </div>
-                    </div>
-                    <p className="mt-2 text-xs text-muted-foreground">Started {job.startedAt}</p>
                   </div>
-                </Link>
-              ))}
-            </div>
-          </Card>
-        </div>
-
-        {/* Model Recommendations Section */}
-        <div className="mt-8">
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold">Model Recommendations</h2>
-            <p className="text-sm text-muted-foreground">Based on your history</p>
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {recommendedModels.map((model) => (
-              <Card key={model.id} className="flex flex-col border-border/40 bg-card/30 p-6 transition-all hover:border-primary/40 hover:bg-muted/30">
-                <div className="flex-1">
-                  <div className="mb-2">
-                    <h3 className="font-semibold text-lg leading-tight">{model.name}</h3>
-                    <p className="text-xs font-medium text-primary mt-1">{model.category}</p>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-3 mb-6 line-clamp-2">
-                    {model.description}
-                  </p>
-                  <div className="text-xs text-muted-foreground mb-4">
-                    {model.runs.toLocaleString()} total runs
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.03] border border-white/[0.03] shrink-0 group-hover:scale-110 group-hover:bg-primary/10 group-hover:border-primary/20 transition-all duration-500">
+                    <stat.icon className="h-7 w-7 text-primary transition-colors" />
                   </div>
                 </div>
-                <Link href={`/marketplace`}>
-                  <Button className="w-full gap-2">
-                    <Play className="h-4 w-4" />
-                    Run Inference
-                  </Button>
-                </Link>
-              </Card>
+              </div>
             ))}
+          </div>
+
+          <div className="grid gap-8 lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-8">
+              {/* Active Operations */}
+              <div className="glass-card p-10 border-white/[0.03] bg-white/[0.01]">
+                <div className="flex items-center justify-between mb-10">
+                  <div>
+                    <h2 className="text-2xl font-semibold tracking-normal text-white/95">Active Operations</h2>
+                    <p className="text-xs font-semibold text-slate-300 mt-1 capitalize tracking-normal">Neural Network Telemetry</p>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-2xl bg-primary/10 px-5 py-2 border border-primary/20">
+                    <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(139,92,246,0.8)]" />
+                    <span className="text-[11px] font-semibold text-primary text-neutral-500">
+                      {activeJobs.filter(j => ['running', 'assigned', 'pending'].includes(j.status)).length} Live
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="grid gap-5">
+                  {activeJobs.map((job) => (
+                    <Link key={job.id} href={`/buyer/jobs/${job.id}`}>
+                      <div className="group rounded-[1.5rem] border border-white/[0.03] bg-white/[0.01] p-6 transition-all duration-500 hover:bg-white/[0.03] hover:border-white/[0.03]">
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="flex items-center gap-5">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 border border-white/[0.03] group-hover:bg-primary/20 group-hover:border-primary/30 transition-all duration-500">
+                              <Activity className="h-6 w-6 text-foreground/70 group-hover:text-primary transition-colors" />
+                            </div>
+                            <div>
+                              <p className="text-[15px] font-semibold tracking-normal text-white/90">{job.model}</p>
+                              <p className="text-xs text-slate-400 font-mono mt-1 tracking-normal">{job.id}</p>
+                            </div>
+                          </div>
+                          <span className={`rounded-xl px-4 py-1.5 text-xs font-semibold text-neutral-500 border transition-all duration-500 ${
+                            job.status === 'running' ? 'bg-primary/10 text-primary border-primary/30 shadow-[0_0_15px_rgba(139,92,246,0.1)]'
+                            : job.status === 'assigned' ? 'bg-accent/10 text-accent border-accent/30'
+                            : job.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+                            : job.status === 'failed' ? 'bg-destructive/10 text-destructive border-destructive/30'
+                            : 'bg-muted/10 text-foreground/70 border-muted/30'
+                          }`}>
+                            {job.status}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <div className="flex justify-between text-xs font-semibold text-neutral-500 text-foreground/70">
+                            <span>Processing Integrity</span>
+                            <span className="text-white/80">{job.progress}%</span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-white/[0.03] border border-white/5">
+                            <div 
+                              className={`h-full transition-all duration-1000 cubic-bezier(0.4, 0, 0.2, 1) ${
+                                job.status === 'failed' ? 'bg-destructive/80 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
+                                : job.status === 'completed' ? 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_20px_rgba(16,185,129,0.5)]'
+                                : 'bg-gradient-to-r from-primary via-purple-500 to-accent shadow-[0_0_20px_rgba(139,92,246,0.4)]'
+                              }`}
+                              style={{ width: `${job.progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-8">
+              {/* Launch Lab */}
+              <div className="glass-card p-8 border-white/[0.03] bg-white/[0.01]">
+                <h3 className="text-xs font-semibold capitalize tracking-normal text-slate-300 mb-6 px-2">Launch Lab</h3>
+                <div className="grid gap-4">
+                  <Link href="/marketplace">
+                    <div className="group flex items-center gap-5 p-5 rounded-[1.5rem] bg-white/[0.02] border border-white/[0.03] hover:bg-primary/10 hover:border-primary/10 transition-all duration-500">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 border border-primary/10 group-hover:scale-110 transition-transform">
+                        <Store className="h-7 w-7 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-[15px] font-semibold tracking-normal text-white/90">Marketplace</h4>
+                        <p className="text-[11px] text-foreground/70 font-medium mt-1">Acquire compute nodes</p>
+                      </div>
+                      <ArrowUpRight className="h-6 w-6 text-foreground/70 group-hover:text-primary group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
+                    </div>
+                  </Link>
+                  <Link href="/buyer/jobs">
+                    <div className="group flex items-center gap-5 p-5 rounded-[1.5rem] bg-white/[0.02] border border-white/[0.03] hover:bg-accent/10 hover:border-accent/10 transition-all duration-500">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 border border-accent/10 group-hover:scale-110 transition-transform">
+                        <Play className="h-7 w-7 text-accent" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-[15px] font-semibold tracking-normal text-white/90">Deployment logs</h4>
+                        <p className="text-[11px] text-foreground/70 font-medium mt-1">Verify neural execution</p>
+                      </div>
+                      <ArrowUpRight className="h-6 w-6 text-foreground/70 group-hover:text-accent group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
+                    </div>
+                  </Link>
+                </div>
+              </div>
+
+              {/* Nexus Picks */}
+              <div className="glass-card p-8 border-white/[0.03] bg-white/[0.01]">
+                <div className="px-2 flex items-center justify-between mb-8">
+                  <h3 className="text-xs font-semibold capitalize tracking-normal text-foreground/70">Nexus Picks</h3>
+                  <TrendingUp className="h-4 w-4 text-primary/30" />
+                </div>
+                <div className="space-y-6">
+                  {recommendedModels.slice(0, 3).map((model) => (
+                    <div key={model.id} className="group p-5 rounded-[1.5rem] border border-white/[0.03] bg-white/[0.01] hover:bg-white/[0.03] transition-all duration-500">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-[9px] font-semibold text-primary px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-neutral-500">
+                          {model.category}
+                        </span>
+                        <span className="text-[9px] font-semibold text-foreground/70 text-neutral-500">
+                          {model.runs.toLocaleString()} CALLS
+                        </span>
+                      </div>
+                      <h4 className="text-[15px] font-semibold tracking-normal text-white/95 mb-2 group-hover:text-primary transition-all">{model.name}</h4>
+                      <p className="text-[11px] leading-relaxed text-foreground/70 font-medium line-clamp-2 mb-5">{model.description}</p>
+                      <Link href="/marketplace">
+                        <Button variant="outline" className="w-full h-10 text-[11px] font-semibold capitalize tracking-[0.15em] rounded-2xl border-white/[0.03] hover:bg-primary hover:text-white hover:border-primary transition-all duration-500">
+                          Initiate Sequence
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

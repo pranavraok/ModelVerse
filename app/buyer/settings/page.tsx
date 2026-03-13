@@ -2,11 +2,11 @@
 
 import { useState } from "react"
 import { DashboardHeader } from "@/components/dashboard/header"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { cn } from "@/lib/utils"
 import { 
   User, 
   Shield, 
@@ -22,114 +22,116 @@ export default function BuyerSettingsPage() {
   const [activeTab, setActiveTab] = useState("account")
 
   const tabs = [
-    { id: "account", label: "Account", icon: User },
-    { id: "billing", label: "Billing & Wallet", icon: CreditCard },
-    { id: "preferences", label: "Job Preferences", icon: Settings2 },
-    { id: "notifications", label: "Notifications", icon: Bell }
+    { id: "account", label: "Neural Identity", icon: User },
+    { id: "billing", label: "Credit & Ledger", icon: CreditCard },
+    { id: "preferences", label: "Inference Logic", icon: Settings2 },
+    { id: "notifications", label: "Telemetry Alerts", icon: Bell }
   ]
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-transparent bg-mesh relative">
       <DashboardHeader 
-        title="Settings" 
-        subtitle="Manage your buyer account, wallet, and job defaults"
+        title="Configuration" 
+        subtitle="Manage your sovereign parameters and network identity"
       />
       
-      <div className="p-6">
-        <div className="grid gap-6 lg:grid-cols-4">
+      <div className="relative z-10 p-8">
+        <div className="grid gap-10 lg:grid-cols-4">
           {/* Sidebar Nav */}
-          <div className="space-y-1">
+          <div className="space-y-3">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                className={cn(
+                  "flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-[10px] font-semibold capitalize tracking-normal transition-all duration-300 border",
                   activeTab === tab.id
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                }`}
+                    ? "bg-primary border-primary/20 text-white shadow-[0_10px_20px_rgba(139,92,246,0.3)] scale-[1.02]"
+                    : "bg-white/[0.02] border-white/[0.03] text-muted-foreground/40 hover:bg-white/[0.04] hover:text-white"
+                )}
               >
-                <tab.icon className="h-4 w-4" />
+                <tab.icon className={cn("h-4 w-4", activeTab === tab.id ? "text-white" : "text-muted-foreground/20")} />
                 {tab.label}
               </button>
             ))}
           </div>
 
           {/* Settings Content */}
-          <Card className="lg:col-span-3 border-border/40 bg-card/30 p-8">
+          <div className="lg:col-span-3 glass-card p-10 border-white/[0.05]">
             {activeTab === "account" && (
-              <div className="space-y-8">
+              <div className="space-y-12">
                 <div>
-                  <h3 className="text-lg font-semibold">Account Profile</h3>
-                  <p className="text-sm text-muted-foreground">Manage your personal information and contact details.</p>
+                  <h3 className="text-3xl font-semibold tracking-tight text-white">Neural Identity</h3>
+                  <p className="mt-2 text-sm text-muted-foreground/40 font-medium">Sovereign identity parameters for the decentralized network.</p>
                 </div>
                 
-                <div className="space-y-4 max-w-xl">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="fname">First Name</Label>
-                      <Input id="fname" defaultValue="Anirudh" className="bg-input/50" />
+                <div className="space-y-8 max-w-2xl">
+                  <div className="grid gap-8 sm:grid-cols-2">
+                    <div className="space-y-3">
+                      <Label className="text-[10px] font-semibold text-neutral-500 text-muted-foreground/30">First Alias</Label>
+                      <Input defaultValue="Anirudh" className="h-14 bg-white/[0.02] border-white/[0.03] rounded-2xl px-6 focus:ring-primary/20 text-white font-semibold" />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="lname">Last Name</Label>
-                      <Input id="lname" defaultValue="Mulky" className="bg-input/50" />
+                    <div className="space-y-3">
+                      <Label className="text-[10px] font-semibold text-neutral-500 text-muted-foreground/30">Last Alias</Label>
+                      <Input defaultValue="Mulky" className="h-14 bg-white/[0.02] border-white/[0.03] rounded-2xl px-6 focus:ring-primary/20 text-white font-semibold" />
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input id="email" type="email" defaultValue="ani@example.com" className="bg-input/50" />
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-semibold text-neutral-500 text-muted-foreground/30">Neural Contact</Label>
+                    <Input type="email" defaultValue="ani@example.com" className="h-14 bg-white/[0.02] border-white/[0.03] rounded-2xl px-6 focus:ring-primary/20 text-white font-semibold" />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="company">Company (Optional)</Label>
-                    <Input id="company" placeholder="NeuralTech Inc." className="bg-input/50" />
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-semibold text-neutral-500 text-muted-foreground/30">Enterprise Node</Label>
+                    <Input placeholder="NeuralTech Systems" className="h-14 bg-white/[0.02] border-white/[0.03] rounded-2xl px-6 focus:ring-primary/20 text-white font-semibold" />
                   </div>
                 </div>
 
-                <div className="flex justify-end">
-                  <Button className="bg-primary hover:bg-primary/90">
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes
+                <div className="pt-6 border-t border-white/[0.03] flex justify-end">
+                  <Button className="h-14 px-8 bg-primary hover:bg-primary/90 text-white font-semibold text-neutral-500 text-[11px] rounded-2xl shadow-[0_10px_30px_rgba(139,92,246,0.2)]">
+                    <Save className="mr-3 h-4 w-4" />
+                    Synchronize Profile
                   </Button>
                 </div>
               </div>
             )}
 
             {activeTab === "billing" && (
-              <div className="space-y-8">
+              <div className="space-y-12">
                 <div>
-                  <h3 className="text-lg font-semibold">Billing & Wallet</h3>
-                  <p className="text-sm text-muted-foreground">Manage your connected wallet and auto-refill settings.</p>
+                  <h3 className="text-3xl font-semibold tracking-tight text-white">Credit & Ledger</h3>
+                  <p className="mt-2 text-sm text-muted-foreground/40 font-medium">Manage your cryptographic settlement mechanisms.</p>
                 </div>
 
-                <div className="space-y-6">
-                  <Card className="border-accent/20 bg-accent/5 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-full bg-accent/20 flex items-center justify-center">
-                        <Wallet className="h-6 w-6 text-accent" />
+                <div className="space-y-10">
+                  <div className="p-8 rounded-[2rem] bg-accent/5 border border-accent/20 flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-[0_10px_30px_rgba(139,92,246,0.05)]">
+                    <div className="flex items-center gap-6">
+                      <div className="h-16 w-16 rounded-[1.5rem] bg-accent/20 flex items-center justify-center border border-accent/20">
+                        <Wallet className="h-8 w-8 text-accent" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium">Connected Wallet</p>
-                        <p className="font-mono text-xs text-muted-foreground mt-1">0x8912...3456 (Polygon Mainnet)</p>
+                        <p className="text-[10px] font-semibold text-neutral-500 text-accent/60">Active Matrix Wallet</p>
+                        <p className="font-mono text-lg font-semibold text-white mt-1">0x8912...3456</p>
+                        <p className="text-[9px] font-semibold text-muted-foreground/40 mt-1 italic">Polygon Mainnet Protocol</p>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm" className="border-accent/40 text-accent hover:bg-accent/10">Disconnect</Button>
-                  </Card>
+                    <Button variant="ghost" className="h-12 px-6 rounded-xl border border-accent/20 text-[10px] font-semibold text-neutral-500 text-accent hover:bg-accent/10">Terminate Connection</Button>
+                  </div>
 
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
+                  <div className="space-y-8 px-4">
+                    <div className="flex items-center justify-between group">
                       <div>
-                        <p className="text-sm font-medium">Auto-Refill Balance</p>
-                        <p className="text-xs text-muted-foreground">Automatically top up wallet when below 1 MATIC</p>
+                        <p className="text-sm font-semibold text-white tracking-tight">Auto-Replenish Matrix</p>
+                        <p className="text-[10px] font-semibold text-muted-foreground/30 text-neutral-500 mt-1">Sovereign top-up when below 1 MATIC threshold</p>
                       </div>
                       <Switch />
                     </div>
                     
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between group">
                       <div>
-                        <p className="text-sm font-medium">Monthly Spending Limit</p>
-                        <p className="text-xs text-muted-foreground">Cap your total spending to 50 MATIC/month</p>
+                        <p className="text-sm font-semibold text-white tracking-tight">Strategic Spending Cap</p>
+                        <p className="text-[10px] font-semibold text-muted-foreground/30 text-neutral-500 mt-1">Restrict monthly neural cost to 50 MATIC</p>
                       </div>
                       <Switch defaultChecked />
                     </div>
@@ -139,24 +141,25 @@ export default function BuyerSettingsPage() {
             )}
 
             {activeTab === "preferences" && (
-              <div className="space-y-8">
+              <div className="space-y-12">
                 <div>
-                  <h3 className="text-lg font-semibold">Job Preferences</h3>
-                  <p className="text-sm text-muted-foreground">Global defaults for your AI model inference requests.</p>
+                  <h3 className="text-3xl font-semibold tracking-tight text-white">Inference Logic</h3>
+                  <p className="mt-2 text-sm text-muted-foreground/40 font-medium">Fine-tune the execution parameters for your neural missions.</p>
                 </div>
 
-                <div className="space-y-6 max-w-xl">
-                  <div className="space-y-4">
-                    <Label>Preferred Inference Region</Label>
-                    <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-10 max-w-2xl">
+                  <div className="space-y-6">
+                    <Label className="text-[10px] font-semibold text-neutral-500 text-muted-foreground/30">Preferred Neural Cluster</Label>
+                    <div className="grid grid-cols-2 gap-4">
                       {['US East', 'US West', 'Europe', 'Global (Fastest)'].map((region) => (
                         <button 
                           key={region}
-                          className={`rounded-lg border p-3 text-center text-xs font-medium transition-all ${
+                          className={cn(
+                            "h-16 rounded-[1.5rem] border text-[10px] font-semibold capitalize tracking-normal transition-all duration-300",
                             region === 'Global (Fastest)' 
-                              ? 'border-primary bg-primary/10 text-primary' 
-                              : 'border-border/60 hover:border-primary/40'
-                          }`}
+                              ? "bg-primary/10 border-primary/20 text-primary shadow-[0_0_20px_rgba(139,92,246,0.1)]" 
+                              : "bg-white/[0.01] border-white/[0.03] text-muted-foreground/30 hover:bg-white/[0.03] hover:text-white"
+                          )}
                         >
                           {region}
                         </button>
@@ -164,60 +167,62 @@ export default function BuyerSettingsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-4">
-                    <div>
-                      <p className="text-sm font-medium">Always Use High-Performance Nodes</p>
-                      <p className="text-xs text-muted-foreground">Priority execution (may incur higher costs)</p>
+                  <div className="space-y-8 pt-6 border-t border-white/5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-white tracking-tight">High-Throughput Nodes Only</p>
+                        <p className="text-[10px] font-semibold text-muted-foreground/30 text-neutral-500 mt-1 italic">Prioritize execution velocity</p>
+                      </div>
+                      <Switch />
                     </div>
-                    <Switch />
-                  </div>
 
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">Store Inference Results</p>
-                      <p className="text-xs text-muted-foreground">Keep results for 30 days on decentralized storage</p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-white tracking-tight">Decentralized Archive</p>
+                        <p className="text-[10px] font-semibold text-muted-foreground/30 text-neutral-500 mt-1 italic">Persist results on IPFS for 30 solar days</p>
+                      </div>
+                      <Switch defaultChecked />
                     </div>
-                    <Switch defaultChecked />
                   </div>
                 </div>
               </div>
             )}
             
             {activeTab === "notifications" && (
-              <div className="space-y-8">
+              <div className="space-y-12">
                 <div>
-                  <h3 className="text-lg font-semibold">Notification Preferences</h3>
-                  <p className="text-sm text-muted-foreground">Receive updates about job completions and wallet status.</p>
+                  <h3 className="text-3xl font-semibold tracking-tight text-white">Telemetry Alerts</h3>
+                  <p className="mt-2 text-sm text-muted-foreground/40 font-medium">Configure real-time monitoring of your neural operations.</p>
                 </div>
 
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
+                <div className="space-y-8 max-w-2xl">
+                  <div className="flex items-center justify-between group p-8 rounded-[2rem] bg-white/[0.01] border border-white/[0.03] hover:bg-white/[0.02] transition-all">
                     <div>
-                      <p className="text-sm font-medium">Job Completion Notifications</p>
-                      <p className="text-xs text-muted-foreground">Browser push when results are ready</p>
+                      <p className="text-[11px] font-semibold text-white tracking-tight">Mission Completion Sync</p>
+                      <p className="text-[10px] font-medium text-muted-foreground/30 text-neutral-500 mt-1 italic">Instant telemetry when neural path resolves</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch defaultChecked className="data-[state=checked]:bg-primary" />
                   </div>
                   
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between group p-8 rounded-[2rem] bg-white/[0.01] border border-white/[0.03] hover:bg-white/[0.02] transition-all">
                     <div>
-                      <p className="text-sm font-medium">Low Balance Warnings</p>
-                      <p className="text-xs text-muted-foreground">Email alert when context wallet is low</p>
+                      <p className="text-[11px] font-semibold text-white tracking-tight">Credit Depletion Warning</p>
+                      <p className="text-[10px] font-medium text-muted-foreground/30 text-neutral-500 mt-1 italic">Alert when matrix fuel falls below threshold</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch defaultChecked className="data-[state=checked]:bg-primary" />
                   </div>
 
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between group p-8 rounded-[2rem] bg-white/[0.01] border border-white/[0.03] hover:bg-white/[0.02] transition-all">
                     <div>
-                      <p className="text-sm font-medium">New Models in Watchlist</p>
-                      <p className="text-xs text-muted-foreground">Alerts for new models from your favorite creators</p>
+                      <p className="text-[11px] font-semibold text-white tracking-tight">Blueprint Watchlist</p>
+                      <p className="text-[10px] font-medium text-muted-foreground/30 text-neutral-500 mt-1 italic">Notifications for new model architectures</p>
                     </div>
-                    <Switch />
+                    <Switch className="data-[state=checked]:bg-primary" />
                   </div>
                 </div>
               </div>
             )}
-          </Card>
+          </div>
         </div>
       </div>
     </div>

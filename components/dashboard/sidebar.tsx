@@ -37,7 +37,7 @@ const creatorLinks = [
 
 const buyerLinks = [
   { name: "Dashboard", href: "/buyer", icon: LayoutDashboard },
-  { name: "Marketplace", href: "/marketplace", icon: Store },
+  { name: "Marketplace", href: "/buyer/marketplace", icon: Store },
   { name: "My Jobs", href: "/buyer/jobs", icon: Play },
   { name: "History", href: "/buyer/history", icon: History },
   { name: "Settings", href: "/buyer/settings", icon: Settings },
@@ -68,58 +68,74 @@ export function DashboardSidebar({ role }: SidebarProps) {
   }
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border/40 bg-sidebar">
+    <aside className="fixed left-0 top-0 z-40 h-screen w-[320px] border-r border-white/[0.05] bg-[#030303]/80 backdrop-blur-3xl shadow-[4px_0_24px_rgba(0,0,0,0.4)]">
       <div className="flex h-full flex-col">
         {/* Logo */}
-        <div className="flex h-16 items-center gap-2 border-b border-border/40 px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/20">
-            <Cpu className="h-4 w-4 text-primary" />
+        <div className="flex h-24 items-center gap-5 px-8 pb-4 pt-10 mb-6 relative">
+          <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
+          <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-primary/20 to-primary/5 border border-primary/30 shadow-[0_0_20px_rgba(139,92,246,0.15)] group-hover:scale-105 transition-all">
+            <Cpu className="h-6 w-6 text-primary drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]" />
           </div>
-          <span className="text-lg font-semibold tracking-tight">NeuralMarket</span>
+          <span className="relative text-[22px] font-bold tracking-tight text-white drop-shadow-md">ModelVerse</span>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 space-y-2.5 px-5 py-4 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+          <p className="px-3 mb-5 text-[12px] font-bold text-neutral-500 uppercase tracking-[0.2em]">Neural Interface</p>
           {links.map((link) => {
             const isActive = pathname === link.href || 
-              (link.href !== `/${role}` && link.href !== '/marketplace' && pathname.startsWith(link.href)) || 
-              (link.href === '/marketplace' && pathname.startsWith('/marketplace'))
+              (link.href !== `/${role}` && link.href !== '/buyer/marketplace' && pathname.startsWith(link.href)) || 
+              (link.href === '/buyer/marketplace' && pathname.startsWith('/buyer/marketplace'))
             
             return (
               <Link
                 key={link.name}
                 href={link.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  "group relative flex items-center gap-4 rounded-2xl px-4 py-3.5 text-[15px] font-medium transition-all duration-500",
                   isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                    ? "bg-white/[0.06] text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] border border-white/[0.05]"
+                    : "text-neutral-400 hover:bg-white/[0.04] hover:text-white border border-transparent"
                 )}
               >
-                <link.icon className={cn("h-4 w-4", isActive && "text-primary")} />
-                {link.name}
+                {isActive && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent rounded-2xl opacity-50" />
+                )}
+                <div className={cn("relative z-10 flex items-center gap-4 transition-transform duration-500", isActive && "translate-x-1.5")}>
+                  <link.icon className={cn(
+                    "h-5 w-5 transition-all duration-500", 
+                    isActive 
+                      ? "text-primary scale-110 drop-shadow-[0_0_8px_rgba(139,92,246,0.6)]" 
+                      : "text-neutral-500 group-hover:text-white group-hover:scale-110"
+                  )} />
+                  <span className="tracking-wide">{link.name}</span>
+                </div>
               </Link>
             )
           })}
         </nav>
 
         {/* User section */}
-        <div className="border-t border-border/40 p-4">
-          <div className="flex items-center gap-3 rounded-lg px-3 py-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 text-sm font-medium">
-              JD
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-medium">John Doe</p>
-              <p className="truncate text-xs text-muted-foreground capitalize">{role}</p>
+        <div className="mt-auto p-5 space-y-4">
+          <div className="relative !rounded-[24px] border border-white/[0.06] p-5 bg-[#0a0a0a]/60 hover:bg-[#111] transition-all duration-500 cursor-pointer group overflow-hidden shadow-sm">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-gradient-to-tr from-primary/20 to-primary/5 border border-primary/30 text-sm font-bold text-primary capitalize shadow-[0_0_15px_rgba(139,92,246,0.2)] group-hover:scale-105 transition-transform duration-500">
+                AI
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-base font-semibold text-white tracking-tight">0x8912...3456</p>
+                <p className="truncate text-[13px] font-medium text-neutral-400 mt-0.5 capitalize tracking-wide">{role}</p>
+              </div>
             </div>
           </div>
+          
           <button 
             onClick={handleLogout}
-            className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-foreground"
+            className="group flex w-full items-center gap-3 rounded-[16px] px-4 py-3.5 text-[14px] font-medium text-neutral-400 transition-all duration-300 hover:bg-red-500/10 hover:text-red-400 border border-transparent hover:border-red-500/20"
           >
-            <LogOut className="h-4 w-4" />
-            Sign out
+            <LogOut className="h-5 w-5 transition-transform duration-500 group-hover:translate-x-1" />
+            <span className="tracking-wide">Disconnect</span>
           </button>
         </div>
       </div>

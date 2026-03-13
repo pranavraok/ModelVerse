@@ -1,264 +1,236 @@
 """
-node_daemon.py – Main entry-point for the ModelVerse AI inference node.
+node_daemon.py — Single-node auto-demo daemon.
 
-Fixes applied:
-1. send_heartbeat() uses HTTP POST to /api/nodes/heartbeat (not a new WS).
-2. job_client.next_job() is wrapped with reconnect logic so that when the
-   WS drops (close frames 8:1011 or 257:None), the daemon reconnects and
-   resumes — instead of crashing the entire heartbeat loop.
+Flow:
+  1. On start: read NODE_ID + API_KEY from env (written by entrypoint.sh).
+  2. Loop every POLL_INTERVAL seconds:
+       a. POST /api/nodes/heartbeat
+       b. GET pending jobs from Supabase REST (FCFS: ORDER BY created_at ASC LIMIT 1)
+       c. Atomically claim job (UPDATE status='assigned' WHERE status='pending')
+       d. Execute inference (ONNX / TFLite stub)
+       e. POST result back to Supabase + backend
+  3. No bidding. No WebSocket for job assignment. Single node owns everything.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import json
+import logging
 import os
-from datetime import datetime, timezone
+import time
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 import aiohttp
-from aiohttp import WSServerHandshakeError
+from dotenv import load_dotenv
 
-from backend_client import BackendClient
-from contracts.job_manager_client import JobManagerClient
-from healthcheck import run_healthcheck
-from inference_engine import InferenceEngine
-from job_client import JobClient, JobPayload, decode_input_image
-from logger import get_logger
-from model_cache import ModelCache
-from node_capabilities import NodeCapabilities, load_capabilities_from_config
-from utils import ensure_dir, load_config, load_env
-from wallet import Wallet, create_wallet_from_env
+# ── logging ───────────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.DEBUG if os.getenv("LOG_LEVEL", "INFO").upper() == "DEBUG" else logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+)
+_log = logging.getLogger("node_daemon")
 
-_log = get_logger(__name__)
+# ── env ───────────────────────────────────────────────────────────────────────
+load_dotenv(Path(__file__).parent / ".env", override=False)
 
-_RECONNECT_DELAY_SECONDS = 5
+SUPABASE_URL      = os.environ["SUPABASE_URL"].rstrip("/")
+SUPABASE_KEY      = os.environ["SUPABASE_SERVICE_KEY"]   # service-role key
+NODE_ID           = os.environ["NODE_ID"]
+API_KEY           = os.environ["NODE_API_KEY"]
+BACKEND_HTTP_URL  = os.getenv("BACKEND_HTTP_URL", "http://localhost:8000").rstrip("/")
+POLL_INTERVAL     = int(os.getenv("POLL_INTERVAL_SECONDS", "5"))
+HEARTBEAT_EVERY   = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "30"))
 
+_SB_HEADERS = {
+    "apikey":        SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type":  "application/json",
+    "Prefer":        "return=representation",
+}
 
-async def send_heartbeat(address: str, capabilities: NodeCapabilities) -> None:
+# ── fake inference (replace with real ONNX when model is ready) ───────────────
+def _run_inference(input_base64: str, model_cid: str) -> dict[str, Any]:
     """
-    Send a heartbeat via HTTP POST to /api/nodes/heartbeat.
-    Does NOT open a new WebSocket — that was the original source of 403 spam.
+    Demo inference: decode base64 input → compute SHA-256 → return fake credit score.
+    Replace this function body with your real ONNX/TFLite call.
     """
-    _log.info("node heartbeat: address=%s", address)
+    try:
+        raw = base64.b64decode(input_base64)
+    except Exception:
+        raw = input_base64.encode()
 
-    backend_http_url = os.getenv("BACKEND_HTTP_URL", "").strip().rstrip("/")
-    if not backend_http_url:
-        _log.debug("BACKEND_HTTP_URL not set, skipping HTTP heartbeat")
-        return
+    digest = hashlib.sha256(raw).hexdigest()
+    # Deterministic fake score so demo is reproducible
+    score = 0.5 + (int(digest[:4], 16) / 65535) * 0.49
+    return {
+        "credit_score":  round(score, 4),
+        "model_cid":     model_cid,
+        "input_sha256":  digest,
+        "latency_ms":    42,
+    }
 
-    heartbeat_url = f"{backend_http_url}/api/nodes/heartbeat"
+
+# ── Supabase REST helpers ─────────────────────────────────────────────────────
+async def _sb_get(session: aiohttp.ClientSession, path: str, params: dict | None = None) -> list[dict]:
+    url = f"{SUPABASE_URL}/rest/v1/{path}"
+    async with session.get(url, headers=_SB_HEADERS, params=params) as r:
+        if r.status >= 400:
+            text = await r.text()
+            _log.warning("Supabase GET %s → %s: %s", path, r.status, text)
+            return []
+        return await r.json()
+
+
+async def _sb_patch(session: aiohttp.ClientSession, path: str, match: dict, data: dict) -> list[dict]:
+    url = f"{SUPABASE_URL}/rest/v1/{path}"
+    params = {k: f"eq.{v}" for k, v in match.items()}
+    async with session.patch(url, headers=_SB_HEADERS, params=params, json=data) as r:
+        if r.status >= 400:
+            text = await r.text()
+            _log.warning("Supabase PATCH %s → %s: %s", path, r.status, text)
+            return []
+        return await r.json()
+
+
+# ── heartbeat ─────────────────────────────────────────────────────────────────
+async def _heartbeat(session: aiohttp.ClientSession) -> None:
+    url = f"{BACKEND_HTTP_URL}/api/nodes/heartbeat"
     headers = {
-        "x-wallet-address": address,
-        "x-node-api-key": os.getenv("NODE_API_KEY", os.getenv("COORDINATOR_AUTH_TOKEN", "")),
+        "x-wallet-address": os.getenv("WALLET_ADDRESS", ""),
+        "x-node-api-key":   API_KEY,
     }
-
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                heartbeat_url,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                if resp.status == 200:
-                    _log.debug("Heartbeat OK: %s", await resp.json())
-                else:
-                    body = await resp.text()
-                    _log.warning("Heartbeat returned HTTP %s: %s", resp.status, body)
-    except Exception as exc:  # noqa: BLE001
-        _log.warning("Failed to send heartbeat to backend: %s", exc)
+        async with session.post(url, headers=headers, timeout=aiohttp.ClientTimeout(total=8)) as r:
+            _log.debug("Heartbeat → %s", r.status)
+    except Exception as exc:
+        _log.warning("Heartbeat failed: %s", exc)
 
 
-async def handle_job(
-    wallet: Wallet,
-    job_manager: JobManagerClient,
-    engine: InferenceEngine,
-    job_client: JobClient,
-    job: JobPayload,
-) -> None:
-    if job.model_input_type.lower() != "image":
-        raise ValueError(f"Unsupported model_input_type={job.model_input_type}")
-
-    image = decode_input_image(job)
-    preds = await engine.classify_image(
-        cid=job.model_cid,
-        image=image,
-        input_name="input",
-        top_k=3,
+# ── fetch oldest pending job (FCFS) ──────────────────────────────────────────
+async def _fetch_pending_job(session: aiohttp.ClientSession) -> dict | None:
+    rows = await _sb_get(
+        session,
+        "jobs",
+        {
+            "status":           "eq.pending",
+            "assigned_node_id": "is.null",
+            "order":            "created_at.asc",
+            "limit":            "1",
+        },
     )
-    output = {
-        "top_k": [
-            {"class_index": int(idx), "prob": float(prob)}
-            for idx, prob in preds
-        ]
-    }
-
-    tx = job_manager.build_settle_job_tx(
-        from_address=wallet.address,
-        job_id=job.job_id,
-        node_address=wallet.address,
-        creator_address=job.creator_address,
-    )
-    receipt = wallet.build_and_send_tx(tx)
-    _log.info(
-        "settleJob mined: job_id=%s hash=%s status=%s",
-        job.job_id,
-        receipt.transactionHash.hex(),
-        receipt.status,
-    )
-
-    await job_client.send_result(job.job_id, output)
+    return rows[0] if rows else None
 
 
-def _is_ws_disconnect_error(exc: BaseException) -> bool:
+# ── atomically claim a job ────────────────────────────────────────────────────
+async def _claim_job(session: aiohttp.ClientSession, job_id: str) -> bool:
     """
-    Return True for exceptions that mean the WebSocket dropped and
-    we need to reconnect. Matches the two error signatures seen in logs:
-
-      • "Cannot write to closing transport"  (ClientConnectionResetError)
-      • "Received message 8:1011 is not WSMsgType.TEXT"   (WS close frame)
-      • "Received message 257:None is not WSMsgType.TEXT" (aiohttp CLOSED)
+    UPDATE jobs SET status='assigned', assigned_node_id=NODE_ID
+    WHERE id=job_id AND status='pending'
+    Returns True if we won the race.
     """
-    err_str = str(exc)
-    if any(phrase in err_str for phrase in (
-        "closing transport",
-        "Cannot write",
-        "is not WSMsgType.TEXT",
-        "message 8:",
-        "message 257:",
-        "Connection reset",
-    )):
-        return True
-    return type(exc).__name__ in (
-        "ClientConnectionResetError",
-        "ServerDisconnectedError",
-        "WSMessageTypeError",
-        "WSServerHandshakeError",
-        "ConnectionResetError",
+    rows = await _sb_patch(
+        session,
+        "jobs",
+        {"id": job_id, "status": "pending"},   # WHERE clause
+        {"status": "assigned", "assigned_node_id": NODE_ID},
     )
+    return bool(rows)
 
 
-async def _reconnect(job_client: JobClient, ws_url: str) -> bool:
-    """Call job_client.connect() again. Returns True on success."""
-    _log.info("Reconnecting to coordinator WS: %s", ws_url)
-    try:
-        await job_client.connect()
-        _log.info("WS reconnected OK")
-        return True
-    except Exception as exc:  # noqa: BLE001
-        _log.error("WS reconnect failed: %s", exc)
-        return False
+# ── write result back ─────────────────────────────────────────────────────────
+async def _complete_job(session: aiohttp.ClientSession, job_id: str, output: dict) -> None:
+    result_json   = json.dumps(output, sort_keys=True)
+    result_hash   = hashlib.sha256(result_json.encode()).hexdigest()
+
+    await _sb_patch(
+        session,
+        "jobs",
+        {"id": job_id},
+        {
+            "status":      "completed",
+            "result":      result_json,
+            "result_hash": result_hash,
+            "completed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        },
+    )
+    _log.info("Job %s completed — result_hash=%s", job_id, result_hash[:12])
 
 
+# ── mark job failed ───────────────────────────────────────────────────────────
+async def _fail_job(session: aiohttp.ClientSession, job_id: str, reason: str) -> None:
+    await _sb_patch(
+        session,
+        "jobs",
+        {"id": job_id},
+        {"status": "failed", "result": json.dumps({"error": reason})},
+    )
+    _log.warning("Job %s marked failed: %s", job_id, reason)
+
+
+# ── main loop ─────────────────────────────────────────────────────────────────
 async def main() -> None:
-    load_env()
-    config: dict[str, Any] = load_config("node_config.yaml")
-    cache_dir: str = os.getenv("MODEL_CACHE_DIR", "./models_cache")
-    ensure_dir(cache_dir)
+    _log.info("=" * 60)
+    _log.info("ModelVerse Node Daemon starting")
+    _log.info("  NODE_ID  = %s", NODE_ID)
+    _log.info("  BACKEND  = %s", BACKEND_HTTP_URL)
+    _log.info("  POLL     = %ss  HEARTBEAT = %ss", POLL_INTERVAL, HEARTBEAT_EVERY)
+    _log.info("=" * 60)
 
-    if not run_healthcheck(check_ipfs=True):
-        _log.warning("Healthcheck reported issues; daemon will continue with heartbeat mode")
+    last_heartbeat = 0.0
 
-    wallet = create_wallet_from_env()
-    capabilities = load_capabilities_from_config(config)
-
-    node_api_key = os.getenv("NODE_API_KEY", "").strip()
-    node_id: str | None = None
-
-    if not node_api_key:
-        backend_http_url = os.getenv("BACKEND_HTTP_URL", "").strip()
-        if not backend_http_url:
-            raise EnvironmentError("BACKEND_HTTP_URL is required when NODE_API_KEY is not set")
-
-        backend_client = BackendClient(
-            base_url=backend_http_url,
-            wallet_address=wallet.address,
-            logger=_log,
-        )
-        registration = await backend_client.register_node()
-        node_id = registration.node_id
-        node_api_key = registration.api_key
-        os.environ["NODE_API_KEY"] = node_api_key
-        os.environ["COORDINATOR_AUTH_TOKEN"] = node_api_key
-        _log.info("Registered node with backend: node_id=%s", node_id)
-    else:
-        _log.info("Using NODE_API_KEY from environment (registration skipped)")
-
-    max_cache_mb = int(config.get("performance", {}).get("max_model_cache_mb", 1024))
-    model_cache = ModelCache(cache_dir=Path(cache_dir), max_cache_mb=max_cache_mb)
-    engine = InferenceEngine(model_cache)
-
-    ws_url = os.getenv("COORDINATOR_WS_URL", "").strip()
-    auth_token = node_api_key or (os.getenv("COORDINATOR_AUTH_TOKEN", "").strip() or None)
-    if not ws_url:
-        raise EnvironmentError("COORDINATOR_WS_URL is required")
-
-    job_client = JobClient(
-        ws_url=ws_url,
-        auth_token=auth_token,
-        wallet_address=wallet.address,
-        logger=_log,
-        node_id=node_id,
-    )
-
-    try:
-        await job_client.connect()
-    except WSServerHandshakeError as exc:
-        _log.error("Failed initial connection to coordinator WS: %s", exc)
-        return
-
-    job_manager_address = os.getenv("JOB_MANAGER_ADDRESS", "").strip()
-    if not job_manager_address:
-        raise EnvironmentError("JOB_MANAGER_ADDRESS is required")
-    job_manager = JobManagerClient(wallet.web3, job_manager_address)
-
-    interval = int(config.get("node", {}).get("healthcheck_interval_seconds", 30))
-    backoff = int(config.get("network", {}).get("reconnect_backoff_seconds", _RECONNECT_DELAY_SECONDS))
-
-    _log.info(
-        "Starting node daemon (interval=%s sec address=%s node_id=%s)",
-        interval,
-        wallet.address,
-        node_id,
-    )
-
-    while True:
-        try:
-            # ── 1. Heartbeat via HTTP ─────────────────────────────────────
-            await send_heartbeat(wallet.address, capabilities)
-
-            # ── 2. Poll for next job — with disconnect recovery ───────────
-            job: JobPayload | None = None
+    async with aiohttp.ClientSession() as session:
+        while True:
             try:
-                job = await job_client.next_job(timeout=float(interval))
-            except Exception as exc:  # noqa: BLE001
-                if _is_ws_disconnect_error(exc):
-                    _log.warning(
-                        "WS dropped (%s: %s) — will reconnect in %ss",
-                        type(exc).__name__, exc, backoff,
-                    )
-                    await asyncio.sleep(backoff)
-                    await _reconnect(job_client, ws_url)
-                    # Skip rest of this iteration; reconnected WS will be
-                    # used on the next loop pass.
+                # ── heartbeat (rate-limited) ──────────────────────────────
+                now = time.monotonic()
+                if now - last_heartbeat >= HEARTBEAT_EVERY:
+                    await _heartbeat(session)
+                    last_heartbeat = now
+
+                # ── poll Supabase for oldest pending job ──────────────────
+                job = await _fetch_pending_job(session)
+                if job is None:
+                    _log.debug("No pending jobs — sleeping %ss", POLL_INTERVAL)
+                    await asyncio.sleep(POLL_INTERVAL)
                     continue
-                _log.exception("Unexpected error polling for job: %s", exc)
-                await asyncio.sleep(backoff)
-                continue
 
-            # ── 3. Execute job if assigned ────────────────────────────────
-            if job is not None:
+                job_id    = str(job["id"])
+                model_cid = str(job.get("model_cid") or "demo-cid")
+                input_b64 = str(job.get("input_base64") or job.get("input_data_url") or "")
+
+                _log.info("Found pending job: %s  model_cid=%s", job_id, model_cid[:20])
+
+                # ── atomically claim it (FCFS — first PATCH wins) ─────────
+                claimed = await _claim_job(session, job_id)
+                if not claimed:
+                    _log.info("Job %s already claimed by another process — skipping", job_id)
+                    await asyncio.sleep(1)
+                    continue
+
+                _log.info("Claimed job %s — running inference...", job_id)
+
+                # ── run inference ─────────────────────────────────────────
                 try:
-                    await handle_job(wallet, job_manager, engine, job_client, job)
-                except Exception as exc:  # noqa: BLE001
-                    _log.exception("Failed to handle job_id=%s: %s", job.job_id, exc)
+                    loop   = asyncio.get_event_loop()
+                    output = await loop.run_in_executor(
+                        None, _run_inference, input_b64, model_cid
+                    )
+                    await _complete_job(session, job_id, output)
+                except Exception as exc:
+                    _log.exception("Inference failed for job %s: %s", job_id, exc)
+                    await _fail_job(session, job_id, str(exc))
 
-            await asyncio.sleep(interval)
-
-        except Exception as exc:  # noqa: BLE001
-            _log.exception("Daemon loop error: %s", exc)
-            await asyncio.sleep(backoff)
+            except asyncio.CancelledError:
+                _log.info("Daemon shutting down cleanly")
+                break
+            except Exception as exc:
+                _log.exception("Daemon loop error: %s", exc)
+                await asyncio.sleep(POLL_INTERVAL)
 
 
 if __name__ == "__main__":
