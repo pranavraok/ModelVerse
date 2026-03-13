@@ -14,3 +14,4 @@ backend/.venv/
 backend/__pycache__/
 backend/**/*.pyc
 backend/.env
+backend/.env.example
