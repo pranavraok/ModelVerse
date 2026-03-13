@@ -4,13 +4,15 @@ import json
 import asyncio
 import logging
 import base64
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Literal
 from contextlib import suppress
 from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import Depends, FastAPI, HTTPException, Header, Query, WebSocket, WebSocketDisconnect, status, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -79,6 +81,7 @@ active_nodes: Dict[str, WebSocket] = {}
 _DUMMY_INPUT_BASE64 = (
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 )
+_PINATA_PIN_FILE_URL = "https://api.pinata.cloud/pinning/pinFileToIPFS"
 
 
 # ─────────────────────────── Pydantic models ────────────────────────────────
@@ -266,6 +269,124 @@ def _build_job_payload(job_row: dict[str, Any]) -> dict[str, Any]:
             "creator_address": _extract_creator_wallet(job_row),
         },
     }
+
+
+def _encode_multipart_with_file(
+    fields: dict[str, str],
+    file_field_name: str,
+    filename: str,
+    file_bytes: bytes,
+    content_type: str,
+) -> tuple[bytes, str]:
+    boundary = f"----ModelVerseBoundary{uuid.uuid4().hex}"
+    body = bytearray()
+
+    for key, value in fields.items():
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(
+            f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode("utf-8")
+        )
+        body.extend(str(value).encode("utf-8"))
+        body.extend(b"\r\n")
+
+    body.extend(f"--{boundary}\r\n".encode("utf-8"))
+    body.extend(
+        (
+            f'Content-Disposition: form-data; name="{file_field_name}"; '
+            f'filename="{filename}"\r\n'
+        ).encode("utf-8")
+    )
+    body.extend(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
+    body.extend(file_bytes)
+    body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
+
+    return bytes(body), boundary
+
+
+def _upload_file_to_pinata(
+    *,
+    filename: str,
+    file_bytes: bytes,
+    content_type: str,
+    metadata: dict[str, Any],
+) -> str:
+    pinata_jwt = os.getenv("PINATA_JWT") or os.getenv("NEXT_PUBLIC_PINATA_JWT")
+    if not pinata_jwt:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Missing PINATA_JWT in backend environment",
+        )
+
+    fields = {
+        "pinataMetadata": json.dumps(metadata),
+        "pinataOptions": json.dumps({"cidVersion": 1}),
+    }
+    body, boundary = _encode_multipart_with_file(
+        fields=fields,
+        file_field_name="file",
+        filename=filename,
+        file_bytes=file_bytes,
+        content_type=content_type,
+    )
+
+    request = urllib.request.Request(
+        _PINATA_PIN_FILE_URL,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {pinata_jwt}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=35) as response:
+            raw = response.read().decode("utf-8")
+            payload = json.loads(raw)
+    except urllib.error.HTTPError as exc:
+        error_body = ""
+        with suppress(Exception):
+            error_body = exc.read().decode("utf-8")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Pinata upload failed: {error_body or str(exc)}",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Pinata upload failed: {exc}",
+        ) from exc
+
+    cid = str(payload.get("IpfsHash") or "").strip()
+    if not cid:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Pinata response did not include IpfsHash",
+        )
+    return cid
+
+
+def _try_insert_model_rows(candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    last_error: Exception | None = None
+    for payload in candidates:
+        try:
+            response = supabase.table("models").insert(payload).execute()
+            if response.data:
+                return response.data[0]
+        except Exception as exc:
+            text = str(exc).lower()
+            if "duplicate" in text and "ipfs_cid" in text:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="This file is already registered (duplicate ipfs_cid)",
+                ) from exc
+            last_error = exc
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Failed to insert model into Supabase: {last_error}",
+    )
 
 
 # ─────────────────────────── WebSocket helpers ──────────────────────────────
@@ -509,6 +630,111 @@ def list_models_api(
             "offset": offset,
             "count": len(response.data or []),
         },
+    }
+
+
+@app.post("/api/models/upload")
+def upload_model_to_ipfs_and_db(
+    name: str = Form(...),
+    description: str = Form(default=""),
+    category: str = Form(default="other"),
+    sample_input: str = Form(default=""),
+    expected_output: str = Form(default=""),
+    price: str = Form(default="0"),
+    model_file: UploadFile = File(...),
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    wallet = str(current_user.get("wallet") or "").strip().lower()
+    if not wallet:
+        raise HTTPException(status_code=401, detail="Missing creator wallet")
+
+    filename = (model_file.filename or "model.bin").strip()
+    ext = Path(filename).suffix.lower()
+    if ext not in {".onnx", ".tflite"}:
+        raise HTTPException(status_code=400, detail="Only .onnx and .tflite files are allowed")
+
+    file_bytes = model_file.file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    if len(file_bytes) > 100 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File exceeds 100MB limit")
+
+    content_type = model_file.content_type or "application/octet-stream"
+    cid = _upload_file_to_pinata(
+        filename=filename,
+        file_bytes=file_bytes,
+        content_type=content_type,
+        metadata={
+            "name": name,
+            "keyvalues": {
+                "creator_wallet": wallet,
+                "category": category,
+                "filename": filename,
+            },
+        },
+    )
+
+    parsed_price = 0.0
+    with suppress(Exception):
+        parsed_price = float(price)
+
+    base_payload = {
+        "ipfs_cid": cid,
+        "description": description,
+        "category": category,
+        "status": "active",
+        "sample_input": sample_input,
+        "expected_output": expected_output,
+    }
+
+    candidates = [
+        {
+            **base_payload,
+            "name": name,
+            "creator_wallet": wallet,
+            "price_matic": parsed_price,
+            "file_name": filename,
+        },
+        {
+            **base_payload,
+            "model_name": name,
+            "creator_wallet": wallet,
+            "price": parsed_price,
+            "file_name": filename,
+        },
+        {
+            **base_payload,
+            "name": name,
+            "creator_address": wallet,
+            "price_matic": parsed_price,
+            "file_name": filename,
+        },
+        {
+            **base_payload,
+            "model_name": name,
+            "creator_address": wallet,
+            "price": parsed_price,
+            "file_name": filename,
+        },
+        {
+            **base_payload,
+            "creator_wallet": wallet,
+        },
+        {
+            **base_payload,
+            "creator_address": wallet,
+        },
+        base_payload,
+    ]
+
+    inserted = _try_insert_model_rows(candidates)
+    gateway = os.getenv("PINATA_GATEWAY_URL", "https://gateway.pinata.cloud/ipfs/").rstrip("/")
+
+    return {
+        "message": "Model uploaded and stored successfully",
+        "ipfs_cid": cid,
+        "ipfs_url": f"{gateway}/{cid}",
+        "model": inserted,
     }
 
 
