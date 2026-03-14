@@ -57,7 +57,11 @@ const modelUsage = [
 
 export default function CreatorAnalyticsPage() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-950 via-[#050505] to-emerald-950 relative overflow-hidden">
+      {/* Dynamic Background */}
+      <div className="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80" aria-hidden="true">
+        <div className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-primary to-primary/20 opacity-20 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]" style={{ clipPath: 'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)' }}></div>
+      </div>
       <DashboardHeader 
         title="Analytics" 
         subtitle="Deep dive into your AI model performance and audience"
@@ -67,7 +71,7 @@ export default function CreatorAnalyticsPage() {
         {/* KPI Grid */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {kpis.map((kpi) => (
-            <Card key={kpi.title} className="border-border/40 bg-card/30 p-6">
+            <Card key={kpi.title} className="glass-card border-white/[0.15] bg-white/[0.08] backdrop-blur-3xl shadow-[0_0_30px_rgba(255,255,255,0.05)] p-6">
               <div className="flex items-start justify-between">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                   <kpi.icon className="h-5 w-5 text-primary" />
@@ -90,7 +94,7 @@ export default function CreatorAnalyticsPage() {
 
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Main Chart */}
-          <Card className="lg:col-span-2 border-border/40 bg-card/30 p-6">
+          <Card className="lg:col-span-2 glass-card border-white/[0.15] bg-white/[0.08] backdrop-blur-3xl shadow-[0_0_30px_rgba(255,255,255,0.05)] p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h3 className="text-lg font-semibold">Usage Trends</h3>
@@ -138,7 +142,7 @@ export default function CreatorAnalyticsPage() {
           </Card>
 
           {/* Model Distribution */}
-          <Card className="border-border/40 bg-card/30 p-6">
+          <Card className="glass-card border-white/[0.15] bg-white/[0.08] backdrop-blur-3xl shadow-[0_0_30px_rgba(255,255,255,0.05)] p-6">
             <h3 className="text-lg font-semibold mb-6">Usage Distribution</h3>
             <div className="space-y-6">
               {modelUsage.map((model) => (
@@ -172,7 +176,7 @@ export default function CreatorAnalyticsPage() {
         </div>
 
         {/* Geographic Insights Placeholder */}
-        <Card className="border-border/40 bg-card/30 p-8 flex flex-col items-center justify-center text-center">
+        <Card className="glass-card border-white/[0.15] bg-white/[0.08] backdrop-blur-3xl shadow-[0_0_30px_rgba(255,255,255,0.05)] p-8 flex flex-col items-center justify-center text-center">
           <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
             <Users className="h-8 w-8 text-primary" />
           </div>
