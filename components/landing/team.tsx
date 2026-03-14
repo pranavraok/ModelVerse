@@ -6,31 +6,27 @@ import { useRef } from "react"
 
 const team = [
   {
-    name: "Alex Chen",
-    role: "Founder & CEO",
+    name: "ARJUN BHAT",
     bio: "Previously ML lead at Google. Building the future of decentralized AI.",
-    avatar: "AC",
+    avatar: "AB",
     color: "from-blue-500 to-indigo-500"
   },
   {
-    name: "Sarah Miller",
-    role: "CTO",
+    name: "TUSHAR P",
     bio: "Smart contract expert. Ex-Chainlink. Passionate about Web3 infrastructure.",
-    avatar: "SM",
+    avatar: "TP",
     color: "from-emerald-500 to-teal-500"
   },
   {
-    name: "David Park",
-    role: "Head of Product",
+    name: "PRANAV RAO K",
     bio: "10+ years in product. Previously PM at OpenAI and Anthropic.",
-    avatar: "DP",
+    avatar: "PR",
     color: "from-purple-500 to-pink-500"
   },
   {
-    name: "Emma Wilson",
-    role: "Head of Design",
+    name: "A ANIRUDH",
     bio: "Award-winning designer. Creating intuitive Web3 experiences.",
-    avatar: "EW",
+    avatar: "AA",
     color: "from-orange-500 to-rose-500"
   }
 ]
@@ -116,9 +112,6 @@ export function Team() {
               
               <div className="text-center relative z-10 flex-grow">
                 <h3 className="text-2xl font-semibold text-white mb-2">{member.name}</h3>
-                <div className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-gray-300 mb-6 backdrop-blur-md">
-                  {member.role}
-                </div>
                 <p className="text-sm text-gray-400 leading-relaxed font-light mb-8">
                   {member.bio}
                 </p>

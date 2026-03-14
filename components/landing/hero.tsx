@@ -210,9 +210,9 @@ export function Hero() {
                        <Zap className="h-6 w-6 relative z-10 group-hover:scale-110 transition-transform duration-500" />
                      </div>
                      <div>
-                       <h3 className="text-2xl font-semibold text-white group-hover:text-primary transition-colors duration-300">Llama 3</h3>
+                       <h3 className="text-2xl font-semibold text-white group-hover:text-primary transition-colors duration-300">Image Classification Model</h3>
                        <p className="text-[10px] text-muted-foreground tracking-widest uppercase mt-0.5 flex items-center gap-1.5">
-                         META AI
+                         COMPUTER VISION
                        </p>
                      </div>
                    </div>
@@ -280,9 +280,9 @@ export function Hero() {
                        <Cpu className="h-6 w-6 relative z-10 group-hover:scale-110 transition-transform duration-500" />
                      </div>
                      <div>
-                       <h3 className="text-2xl font-semibold text-white group-hover:text-blue-400 transition-colors duration-300">Mistral Large</h3>
+                       <h3 className="text-2xl font-semibold text-white group-hover:text-blue-400 transition-colors duration-300">Credit Scoring Model</h3>
                        <p className="text-[10px] text-muted-foreground tracking-widest uppercase mt-0.5 flex items-center gap-1.5">
-                         MISTRAL
+                         FINTECH AI
                        </p>
                      </div>
                    </div>
