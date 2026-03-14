@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react"
 import { motion, useAnimation } from "framer-motion"
+import { usePathname } from "next/navigation"
 
 // Number of nodes in the blockchain visual
 const NUM_NODES = 40;
@@ -19,6 +20,9 @@ interface Node {
 export function AuthCanvas({ children }: { children: React.ReactNode }) {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const pathname = usePathname();
+
+  const isSelectRolePage = pathname?.includes("/select-role");
 
   useEffect(() => {
     // Initialize nodes
@@ -175,9 +179,12 @@ export function AuthCanvas({ children }: { children: React.ReactNode }) {
           transition={{ type: "spring", stiffness: 75, damping: 25 }}
           className="w-full flex justify-center"
         >
-          {/* A floating, translucent wrapper around the forms */}
+          {/* Keep select-role at its original broad wrapper, but use compact wrapper for login/signup. */}
           <div 
-            className="w-full max-w-[90vw] md:max-w-fit rounded-3xl border border-white/10 bg-black/40 shadow-[0_0_50px_-12px_rgba(139,92,246,0.5)] px-2 py-4 md:px-6 md:py-6"
+            className={isSelectRolePage
+              ? "w-full max-w-[90vw] md:max-w-fit rounded-3xl border border-white/10 bg-black/40 shadow-[0_0_50px_-12px_rgba(139,92,246,0.5)] px-2 py-4 md:px-6 md:py-6"
+              : "w-full max-w-[88vw] md:max-w-xl px-0 py-2 md:py-3 lg:py-4"
+            }
           >
             {children}
           </div>

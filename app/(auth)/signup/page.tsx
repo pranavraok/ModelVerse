@@ -306,7 +306,7 @@ function SignupForm() {
 
   return (
     <>
-      <div className="relative z-10 w-full max-w-2xl px-4 lg:max-w-3xl">
+      <div className="relative z-10 mx-auto w-full max-w-sm px-4 lg:max-w-md">
         {/* header — unchanged */}
         <div className="text-center mb-10 text-white drop-shadow-[0_0_15px_rgba(139,92,246,0.3)]">
           <Link href="/" className="inline-flex items-center justify-center gap-3 group mb-4">
@@ -323,7 +323,7 @@ function SignupForm() {
           </p>
         </div>
 
-        <div className="relative overflow-hidden rounded-3xl border border-white/20 bg-black/45 p-8 shadow-[0_20px_80px_-28px_rgba(15,23,42,0.95),0_0_30px_rgba(139,92,246,0.25)] space-y-7 md:p-10 lg:p-12">
+        <div className="relative overflow-hidden rounded-3xl border border-white/20 bg-black/45 p-7 shadow-[0_20px_80px_-28px_rgba(15,23,42,0.95),0_0_30px_rgba(139,92,246,0.25)] space-y-6 md:p-8 lg:p-10">
           <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-linear-to-r from-transparent via-primary/70 to-transparent" />
 
           {/* ── Node-operator: wallet flow ── */}
