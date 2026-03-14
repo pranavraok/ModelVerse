@@ -8,8 +8,9 @@ import mimetypes
 import subprocess
 import shutil
 import time
+from collections import defaultdict
 from urllib.parse import quote
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Literal
 from contextlib import suppress
@@ -775,6 +776,89 @@ def _existing_columns(table: str, candidates: list[str]) -> set[str]:
     return {col for col in candidates if _column_exists(table, col)}
 
 
+def _as_float(value: Any, fallback: float = 0.0) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except Exception:
+            return fallback
+    return fallback
+
+
+def _as_int(value: Any, fallback: int = 0) -> int:
+    if isinstance(value, bool):
+        return fallback
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(float(value))
+        except Exception:
+            return fallback
+    return fallback
+
+
+def _extract_wallet_value(row: dict[str, Any], keys: list[str]) -> str:
+    for key in keys:
+        value = row.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text.lower()
+    return ""
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str):
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _creator_owner_columns() -> list[str]:
+    return ["creator_wallet", "creator_address", "owner_wallet", "wallet_address", "wallet", "creator"]
+
+
+def _fetch_models_for_creator(wallet: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for owner_col in _creator_owner_columns():
+        try:
+            response = supabase.table("models").select("*").eq(owner_col, wallet).execute()
+            if response.data:
+                rows = response.data
+                break
+        except Exception:
+            continue
+    return rows
+
+
+def _fetch_jobs_for_creator(wallet: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for owner_col in _creator_owner_columns():
+        try:
+            response = supabase.table("jobs").select("*").eq(owner_col, wallet).execute()
+            if response.data:
+                rows = response.data
+                break
+        except Exception:
+            continue
+    return rows
+
+
 @app.post("/api/models/upload")
 async def upload_model_api(
     name: str = Form(...),
@@ -1521,6 +1605,216 @@ def list_jobs(current_user: dict[str, Any] = Depends(get_current_user)):
         merged[job_id] = job
 
     return {"wallet": wallet, "items": list(merged.values()), "count": len(merged)}
+
+
+@app.get("/api/creator/dashboard")
+def creator_dashboard(current_user: dict[str, Any] = Depends(get_current_user)):
+    wallet = str(current_user["wallet"]).strip().lower()
+    models = _fetch_models_for_creator(wallet)
+    jobs = _fetch_jobs_for_creator(wallet)
+
+    model_name_by_id: dict[str, str] = {}
+    model_status_by_id: dict[str, str] = {}
+    model_price_by_id: dict[str, float] = {}
+
+    active_models = 0
+    model_job_fallback = 0
+    for model in models:
+        model_id = str(model.get("id") or "").strip()
+        if model_id:
+            model_name_by_id[model_id] = str(model.get("name") or "Untitled Model")
+            model_status_by_id[model_id] = str(model.get("status") or "active")
+
+            price = _as_float(model.get("price"), float("nan"))
+            if price != price:
+                price = _as_float(model.get("price_per_inference"), float("nan"))
+            if price != price:
+                price = _as_float(model.get("inference_price"), float("nan"))
+            if price != price:
+                price = _as_float(model.get("price_matic"), 0.0)
+            model_price_by_id[model_id] = max(price, 0.0)
+
+        status = str(model.get("status") or "active").strip().lower()
+        if status == "active":
+            active_models += 1
+
+        model_job_fallback += max(
+            _as_int(model.get("jobs"), 0),
+            _as_int(model.get("job_count"), 0),
+            _as_int(model.get("total_jobs"), 0),
+            _as_int(model.get("usage_count"), 0),
+        )
+
+    completed_statuses = {"completed", "success", "succeeded", "done"}
+    pending_statuses = {"pending", "queued", "assigned", "running", "in_progress"}
+
+    total_jobs = len(jobs)
+    completed_jobs = 0
+    pending_jobs = 0
+    total_earnings = 0.0
+    pending_earnings = 0.0
+    total_latency_ms = 0.0
+    latency_count = 0
+    unique_users: set[str] = set()
+    model_inferences: dict[str, int] = defaultdict(int)
+    model_earnings: dict[str, float] = defaultdict(float)
+    daily_rollup: dict[str, dict[str, float]] = defaultdict(lambda: {"earnings": 0.0, "inferences": 0.0})
+
+    transactions: list[dict[str, Any]] = []
+
+    for job in jobs:
+        status = str(job.get("status") or "pending").strip().lower()
+        amount = max(
+            _as_float(job.get("payment_amount"), float("nan")),
+            _as_float(job.get("payment"), float("nan")),
+            _as_float(job.get("price"), 0.0),
+        )
+        if amount != amount:
+            amount = 0.0
+
+        created_dt = _parse_iso_datetime(job.get("created_at") or job.get("updated_at") or job.get("completed_at"))
+        created_iso = created_dt.isoformat() if created_dt else ""
+        created_day = created_dt.date().isoformat() if created_dt else ""
+
+        buyer = _extract_wallet_value(job, ["buyer_wallet", "buyer_address", "wallet_address", "wallet"])
+        if buyer and buyer != wallet:
+            unique_users.add(buyer)
+
+        model_id = str(job.get("model_id") or "").strip()
+        model_name = model_name_by_id.get(model_id) or str(job.get("model_name") or "Unknown Model")
+
+        if status in completed_statuses:
+            completed_jobs += 1
+            total_earnings += amount
+            if created_day:
+                daily_rollup[created_day]["earnings"] += amount
+                daily_rollup[created_day]["inferences"] += 1
+        elif status in pending_statuses:
+            pending_jobs += 1
+            pending_earnings += amount
+
+        if model_id:
+            model_inferences[model_id] += 1
+            model_earnings[model_id] += amount
+
+        latency = _as_float(job.get("execution_time_ms"), -1.0)
+        if latency >= 0:
+            total_latency_ms += latency
+            latency_count += 1
+
+        tx_hash = str(
+            job.get("tx_hash")
+            or job.get("payment_tx_hash")
+            or job.get("transaction_hash")
+            or job.get("result_hash")
+            or ""
+        ).strip()
+
+        transactions.append(
+            {
+                "id": str(job.get("id") or ""),
+                "type": "earning",
+                "model": model_name,
+                "amount_matic": round(amount, 6),
+                "buyer": buyer,
+                "tx_hash": tx_hash,
+                "date": created_iso,
+                "status": status,
+            }
+        )
+
+    total_inferences = completed_jobs if completed_jobs > 0 else total_jobs
+    if total_inferences == 0:
+        total_inferences = model_job_fallback
+
+    avg_latency_ms = round(total_latency_ms / latency_count, 2) if latency_count > 0 else 0.0
+    model_health_pct = 100.0
+    if total_jobs > 0:
+        successful = completed_jobs
+        model_health_pct = round((successful / total_jobs) * 100, 2)
+
+    sortable_models: list[dict[str, Any]] = []
+    for model_id, name in model_name_by_id.items():
+        inf = model_inferences.get(model_id, 0)
+        earned = round(model_earnings.get(model_id, 0.0), 6)
+        price = model_price_by_id.get(model_id, 0.0)
+        if earned <= 0 and inf > 0 and price > 0:
+            earned = round(inf * price, 6)
+
+        sortable_models.append(
+            {
+                "id": model_id,
+                "name": name,
+                "inferences": inf,
+                "users": inf,
+                "earnings_matic": earned,
+                "status": model_status_by_id.get(model_id, "active"),
+            }
+        )
+
+    sortable_models.sort(key=lambda item: (item["earnings_matic"], item["inferences"]), reverse=True)
+    top_models = sortable_models[:5]
+
+    usage_total = sum(item["inferences"] for item in sortable_models)
+    usage_distribution: list[dict[str, Any]] = []
+    if usage_total > 0:
+        for item in sortable_models[:4]:
+            usage_distribution.append(
+                {
+                    "name": item["name"],
+                    "usage_percent": round((item["inferences"] / usage_total) * 100, 2),
+                    "inferences": item["inferences"],
+                }
+            )
+
+    if not usage_distribution and top_models:
+        usage_distribution = [
+            {
+                "name": item["name"],
+                "usage_percent": round(100.0 / len(top_models), 2),
+                "inferences": item["inferences"],
+            }
+            for item in top_models
+        ]
+
+    transactions.sort(key=lambda item: item.get("date") or "", reverse=True)
+    recent_transactions = transactions[:20]
+
+    today = datetime.now(timezone.utc).date()
+    earnings_history: list[dict[str, Any]] = []
+    for day_offset in range(29, -1, -1):
+        day = (today - timedelta(days=day_offset)).isoformat()
+        bucket = daily_rollup.get(day, {"earnings": 0.0, "inferences": 0.0})
+        earnings_history.append(
+            {
+                "date": day,
+                "earnings_matic": round(float(bucket["earnings"]), 6),
+                "inferences": int(bucket["inferences"]),
+            }
+        )
+
+    withdrawable_balance = max(total_earnings - pending_earnings, 0.0)
+
+    return {
+        "wallet": wallet,
+        "summary": {
+            "total_earnings_matic": round(total_earnings, 6),
+            "pending_earnings_matic": round(pending_earnings, 6),
+            "withdrawable_balance_matic": round(withdrawable_balance, 6),
+            "active_models": active_models,
+            "total_inferences": total_inferences,
+            "unique_users": len(unique_users),
+            "total_jobs": total_jobs,
+            "completed_jobs": completed_jobs,
+            "pending_jobs": pending_jobs,
+            "avg_latency_ms": avg_latency_ms,
+            "model_health_pct": model_health_pct,
+        },
+        "top_models": top_models,
+        "usage_distribution": usage_distribution,
+        "recent_transactions": recent_transactions,
+        "earnings_history": earnings_history,
+    }
 
 
 # ─────────────────────────── WebSocket /ws/jobs ─────────────────────────────
