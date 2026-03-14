@@ -8,6 +8,7 @@ import mimetypes
 import subprocess
 import shutil
 import time
+from urllib.parse import quote
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Literal
@@ -158,6 +159,12 @@ class SelectRoleRequest(BaseModel):
     role: Literal["creator", "buyer", "node-operator"]
 
 
+class OAuthStartRequest(BaseModel):
+    provider: Literal["google", "github"]
+    role: Literal["creator", "buyer", "node-operator"]
+    mode: Literal["signup", "login"]
+
+
 # ─────────────────────────── Supabase helpers ───────────────────────────────
 
 def _response_to_dict(response: Any) -> dict[str, Any]:
@@ -174,6 +181,25 @@ def _response_to_dict(response: Any) -> dict[str, Any]:
 
 def _is_transient_supabase_error(exc: Exception) -> bool:
     message = str(exc).lower()
+
+
+@app.post("/auth/oauth/start")
+def auth_oauth_start(payload: OAuthStartRequest):
+    frontend_url = os.getenv("FRONTEND_URL", "https://model-verse-tau.vercel.app").strip().rstrip("/")
+    redirect_to = f"{frontend_url}/login?role={payload.role}"
+
+    oauth_base = f"{url.rstrip('/')}/auth/v1/authorize"
+    oauth_url = (
+        f"{oauth_base}?provider={payload.provider}&redirect_to={quote(redirect_to, safe='')}"
+    )
+
+    return {
+        "oauth_url": oauth_url,
+        "redirect_to": redirect_to,
+        "provider": payload.provider,
+        "role": payload.role,
+        "mode": payload.mode,
+    }
     transient_markers = (
         "connectionterminated",
         "connection terminated",
