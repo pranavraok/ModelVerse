@@ -25,6 +25,7 @@ import {
   DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
 import { getOAuthStartUrl, signupWithRole, type UserRole } from "@/lib/auth-api"
+import { getBackendUrl } from "@/lib/runtime-env"
 import {
   useAccount,
   useWriteContract,
@@ -35,8 +36,7 @@ import { parseEther } from "viem"
 import { ConnectButton } from "@rainbow-me/rainbowkit"
 
 // ─── env ──────────────────────────────────────────────────────────────────────
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000"
+const BACKEND_URL = getBackendUrl()
 
 const STAKING_CONTRACT =
   (process.env.NEXT_PUBLIC_STAKING_CONTRACT ??

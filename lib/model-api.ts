@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from "@/lib/runtime-env"
+
 export interface MarketplaceModel {
   id: string
   name: string
@@ -17,7 +19,7 @@ export interface MarketplaceModel {
   status?: string
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"
+const API_BASE_URL = getApiBaseUrl()
 const FALLBACK_WALLET = "0x0000000000000000000000000000000000000000"
 
 function asNumber(value: unknown, fallback = 0): number {

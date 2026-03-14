@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 import StakeRegistryABI from "@/lib/abis/ModelVerseStakeRegistryABI.json"
 import ModelRegistryABI from "@/lib/abis/ModelRegistryABI.json"
+import { getApiBaseUrl } from "@/lib/runtime-env"
 
 const STAKE_REGISTRY_ADDRESS =
   (process.env.NEXT_PUBLIC_STAKE_REGISTRY_ADDRESS ??
@@ -183,7 +184,7 @@ export default function UploadModelPage() {
       setIsUploading(true)
       setUploadProgress(15)
 
-      const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"
+      const apiBase = getApiBaseUrl()
       const body = new FormData()
       body.append("name", formData.name.trim())
       body.append("description", formData.description)

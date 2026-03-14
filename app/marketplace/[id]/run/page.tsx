@@ -21,8 +21,9 @@ import {
 } from "lucide-react"
 import { fetchModelById, type MarketplaceModel } from "@/lib/model-api"
 import JobManagerABI from "@/lib/abis/ModelVerseJobManagerABI.json"
+import { getApiBaseUrl } from "@/lib/runtime-env"
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"
+const API_BASE_URL = getApiBaseUrl()
 const INFERENCE_JOB_MANAGER_ADDRESS =
   (process.env.NEXT_PUBLIC_INFERENCE_JOB_MANAGER_ADDRESS ??
     "0x0000000000000000000000000000000000000000") as `0x${string}`

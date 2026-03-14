@@ -22,10 +22,10 @@ import {
 import { DashboardHeader } from "@/components/dashboard/header"
 import { Card }            from "@/components/ui/card"
 import { Button }          from "@/components/ui/button"
+import { getBackendUrl }   from "@/lib/runtime-env"
 
 // ─── env ──────────────────────────────────────────────────────────────────────
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000"
+const BACKEND_URL = getBackendUrl()
 
 const STAKING_CONTRACT =
   (process.env.NEXT_PUBLIC_STAKING_CONTRACT ??

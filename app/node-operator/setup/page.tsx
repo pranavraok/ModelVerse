@@ -14,13 +14,14 @@ import { useMemo, useState } from "react"
 import { DashboardHeader } from "@/components/dashboard/header"
 import { Card }            from "@/components/ui/card"
 import { Button }          from "@/components/ui/button"
+import { getBackendUrl, getWsJobsUrl } from "@/lib/runtime-env"
 import {
   Copy, Terminal, CheckCircle2, Download, ExternalLink, AlertCircle,
 } from "lucide-react"
 
 // ─── env ──────────────────────────────────────────────────────────────────────
-const BACKEND_URL   = process.env.NEXT_PUBLIC_BACKEND_URL            ?? "http://localhost:8000"
-const WS_URL        = process.env.NEXT_PUBLIC_WS_URL                 ?? "ws://localhost:8000/ws/jobs"
+const BACKEND_URL   = getBackendUrl()
+const WS_URL        = getWsJobsUrl()
 const STAKING_ADDR  = process.env.NEXT_PUBLIC_STAKING_CONTRACT       ?? "0x0000000000000000000000000000000000000000"
 const JOB_MANAGER   = process.env.NEXT_PUBLIC_JOB_MANAGER_ADDRESS    ?? "0x0000000000000000000000000000000000000000"
 const MODEL_REG     = process.env.NEXT_PUBLIC_MODEL_REGISTRY_ADDRESS ?? "0x0000000000000000000000000000000000000000"
