@@ -1,8 +1,11 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { useAccount } from "wagmi"
 import { DashboardHeader } from "@/components/dashboard/header"
 import { Button } from "@/components/ui/button"
+import { EMPTY_BUYER_DASHBOARD, fetchBuyerDashboard } from "@/lib/buyer-api"
 import { 
   Play, 
   CheckCircle, 
@@ -16,111 +19,61 @@ import {
   TrendingUp
 } from "lucide-react"
 
-const stats = [
-  {
-    title: "Total Jobs Submitted",
-    value: "156",
-    change: "+8",
-    trend: "up",
-    icon: Play,
-    color: "from-primary/10 to-transparent"
-  },
-  {
-    title: "Active Jobs",
-    value: "3",
-    change: "Running",
-    trend: "neutral",
-    icon: RefreshCw,
-    color: "from-chart-4/10 to-transparent"
-  },
-  {
-    title: "Total Spent",
-    value: "12.8 MATIC",
-    change: "+2.3",
-    trend: "up",
-    icon: Wallet,
-    color: "from-accent/10 to-transparent"
-  },
-  {
-    title: "Average Job Cost",
-    value: "0.08 MATIC",
-    change: "-5%",
-    trend: "down",
-    icon: CheckCircle,
-    color: "from-chart-3/10 to-transparent"
-  }
-]
-
-const activeJobs = [
-  {
-    id: "JOB-1848",
-    model: "Stable-Diffusion-XL",
-    status: "assigned",
-    progress: 10,
-    startedAt: "Just now"
-  },
-  {
-    id: "JOB-1847",
-    model: "GPT-Vision-Pro",
-    status: "running",
-    progress: 65,
-    startedAt: "2 min ago"
-  },
-  {
-    id: "JOB-1846",
-    model: "NLP-Sentiment",
-    status: "pending",
-    progress: 0,
-    startedAt: "5 min ago"
-  },
-  {
-    id: "JOB-1845",
-    model: "Image-Classifier",
-    status: "completed",
-    progress: 100,
-    startedAt: "8 min ago"
-  },
-  {
-    id: "JOB-1844",
-    model: "Voice-Analysis",
-    status: "failed",
-    progress: 45,
-    startedAt: "10 min ago"
-  }
-]
-
-const recommendedModels = [
-  {
-    id: "MOD-1",
-    name: "Llama-3-70b-Instruct",
-    category: "Large Language Model",
-    description: "Highly capable open-weight model for complex reasoning.",
-    runs: 1245,
-  },
-  {
-    id: "MOD-2",
-    name: "Stable-Video-Diffusion",
-    category: "Video Generation",
-    description: "State-of-the-art video generation from images.",
-    runs: 856,
-  },
-  {
-    id: "MOD-3",
-    name: "Whisper-v3-Large",
-    category: "Audio Transcription",
-    description: "Robust multilingual speech recognition.",
-    runs: 3421,
-  },
-  {
-    id: "MOD-4",
-    name: "Mixtral-8x7B",
-    category: "MoE Language Model",
-    description: "Fast, efficient MoE model that matches GPT-3.5.",
-    runs: 2109,
-  }
-]
-
 export default function BuyerDashboard() {
+  const { address } = useAccount()
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState("")
+  const [dashboardData, setDashboardData] = useState(EMPTY_BUYER_DASHBOARD)
+
+  useEffect(() => {
+    let ignore = false
+
+    const loadDashboard = async () => {
+      if (!address) {
+        setDashboardData(EMPTY_BUYER_DASHBOARD)
+        setLoadError("")
+        setIsLoading(false)
+        return
+      }
+
+      try {
+        setIsLoading(true)
+        setLoadError("")
+        const data = await fetchBuyerDashboard(address)
+        if (!ignore) {
+          setDashboardData(data)
+        }
+      } catch (error) {
+        if (!ignore) {
+          setLoadError(error instanceof Error ? error.message : "Failed to load buyer dashboard")
+          setDashboardData(EMPTY_BUYER_DASHBOARD)
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void loadDashboard()
+    return () => {
+      ignore = true
+    }
+  }, [address])
+
+  const stats = useMemo(
+    () => [
+      { ...dashboardData.stats[0], icon: Play },
+      { ...dashboardData.stats[1], icon: RefreshCw },
+      { ...dashboardData.stats[2], icon: Wallet },
+      { ...dashboardData.stats[3], icon: CheckCircle },
+    ],
+    [dashboardData.stats]
+  )
+
+  const activeJobs = dashboardData.activeJobs
+  const recommendedModels = dashboardData.recommendedModels
+
   return (
     <div className="min-h-screen pb-12 bg-transparent bg-mesh relative">
       {/* Background Auroras - Synchronized with Landing Page */}
@@ -185,6 +138,12 @@ export default function BuyerDashboard() {
                 </div>
                 
                 <div className="grid gap-5">
+                  {!isLoading && !loadError && activeJobs.length === 0 && (
+                    <div className="rounded-[1.5rem] border border-white/[0.03] bg-white/[0.01] p-6 text-xs font-semibold text-slate-300 tracking-normal">
+                      No jobs yet. Run a model from Marketplace to see live operations here.
+                    </div>
+                  )}
+
                   {activeJobs.map((job) => (
                     <Link key={job.id} href={`/buyer/jobs/${job.id}`}>
                       <div className="group rounded-[1.5rem] border border-white/[0.03] bg-white/[0.01] p-6 transition-all duration-500 hover:bg-white/[0.03] hover:border-white/[0.03]">
@@ -271,6 +230,12 @@ export default function BuyerDashboard() {
                   <TrendingUp className="h-4 w-4 text-primary/30" />
                 </div>
                 <div className="space-y-6">
+                  {!isLoading && !loadError && recommendedModels.length === 0 && (
+                    <div className="group p-5 rounded-[1.5rem] border border-white/[0.03] bg-white/[0.01] text-[11px] leading-relaxed text-foreground/70 font-medium">
+                      No model recommendations yet. Models with live usage will appear here automatically.
+                    </div>
+                  )}
+
                   {recommendedModels.slice(0, 3).map((model) => (
                     <div key={model.id} className="group p-5 rounded-[1.5rem] border border-white/[0.03] bg-white/[0.01] hover:bg-white/[0.03] transition-all duration-500">
                       <div className="flex items-center justify-between mb-4">
@@ -294,6 +259,24 @@ export default function BuyerDashboard() {
               </div>
             </div>
           </div>
+
+          {!address && !isLoading && (
+            <div className="glass-card p-4 border-white/[0.03] bg-white/[0.01] text-xs font-semibold text-slate-300 tracking-normal">
+              Connect your wallet to load live buyer dashboard metrics.
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="glass-card p-4 border-white/[0.03] bg-white/[0.01] text-xs font-semibold text-slate-300 tracking-normal">
+              Loading buyer dashboard metrics from Supabase...
+            </div>
+          )}
+
+          {loadError && !isLoading && (
+            <div className="glass-card p-4 border-white/[0.03] bg-white/[0.01] text-xs font-semibold text-red-300 tracking-normal">
+              {loadError}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,8 +1,9 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { useAccount } from "wagmi"
 import { DashboardHeader } from "@/components/dashboard/header"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -13,93 +14,112 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { fetchBuyerJobs, type BuyerJobStatus } from "@/lib/buyer-api"
 import { 
   Search,
-  Play,
   CheckCircle,
   Clock,
   AlertCircle,
   RefreshCw,
   Eye,
-  RotateCcw
+  Zap
 } from "lucide-react"
 
-const jobs = [
-  {
-    id: "JOB-1848",
-    model: "GPT-Vision-Pro",
-    status: "running",
-    progress: 75,
-    cost: "0.0525 MATIC",
-    input: '{"image": "base64..."}',
-    createdAt: "2026-03-12 14:45",
-    completedAt: null
-  },
-  {
-    id: "JOB-1847",
-    model: "NLP-Sentiment-v3",
-    status: "pending",
-    progress: 0,
-    cost: "0.0315 MATIC",
-    input: '{"text": "Sample text..."}',
-    createdAt: "2026-03-12 14:42",
-    completedAt: null
-  },
-  {
-    id: "JOB-1846",
-    model: "Image-Classifier",
-    status: "completed",
-    progress: 100,
-    cost: "0.063 MATIC",
-    input: '{"image": "base64..."}',
-    createdAt: "2026-03-12 14:30",
-    completedAt: "2026-03-12 14:31"
-  },
-  {
-    id: "JOB-1845",
-    model: "Credit-Score-AI",
-    status: "completed",
-    progress: 100,
-    cost: "0.126 MATIC",
-    input: '{"data": {...}}',
-    createdAt: "2026-03-12 13:15",
-    completedAt: "2026-03-12 13:17"
-  },
-  {
-    id: "JOB-1844",
-    model: "Voice-Transcriber",
-    status: "failed",
-    progress: 0,
-    cost: "0.00 MATIC",
-    input: '{"audio": "base64..."}',
-    createdAt: "2026-03-12 12:00",
-    completedAt: "2026-03-12 12:01"
-  },
-  {
-    id: "JOB-1843",
-    model: "GPT-Vision-Pro",
-    status: "completed",
-    progress: 100,
-    cost: "0.0525 MATIC",
-    input: '{"image": "base64..."}',
-    createdAt: "2026-03-12 10:30",
-    completedAt: "2026-03-12 10:32"
-  }
-]
-
 const statusConfig = {
+  assigned: { label: "Assigned", color: "bg-indigo-500/20 text-indigo-300", icon: Zap },
   pending: { label: "Pending", color: "bg-chart-4/20 text-chart-4", icon: Clock },
   running: { label: "Running", color: "bg-primary/20 text-primary", icon: RefreshCw },
   completed: { label: "Completed", color: "bg-accent/20 text-accent", icon: CheckCircle },
   failed: { label: "Failed", color: "bg-destructive/20 text-destructive", icon: AlertCircle }
 }
 
+type JobsFilter = "all" | BuyerJobStatus
+
+interface JobsPageItem {
+  id: string
+  model: string
+  status: BuyerJobStatus
+  progress: number
+  cost: string
+  createdAt: string
+}
+
 export default function JobsPage() {
+  const { address } = useAccount()
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState<JobsFilter>("all")
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState("")
+  const [jobs, setJobs] = useState<JobsPageItem[]>([])
+
+  useEffect(() => {
+    let ignore = false
+
+    const loadJobs = async () => {
+      if (!address) {
+        setJobs([])
+        setLoadError("")
+        setIsLoading(false)
+        return
+      }
+
+      try {
+        setIsLoading(true)
+        setLoadError("")
+
+        const rows = await fetchBuyerJobs(address)
+        if (!ignore) {
+          setJobs(
+            rows.map((row) => ({
+              id: row.id,
+              model: row.modelName,
+              status: row.status,
+              progress: row.progress,
+              cost: row.costLabel,
+              createdAt: row.createdAtLabel,
+            }))
+          )
+        }
+      } catch (error) {
+        if (!ignore) {
+          setLoadError(error instanceof Error ? error.message : "Failed to load jobs")
+          setJobs([])
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void loadJobs()
+    const timer = window.setInterval(() => {
+      void loadJobs()
+    }, 8000)
+
+    return () => {
+      ignore = true
+      window.clearInterval(timer)
+    }
+  }, [address])
+
+  const filteredJobs = useMemo(() => {
+    const needle = searchQuery.trim().toLowerCase()
+    return jobs.filter((job) => {
+      const statusMatch = statusFilter === "all" ? true : job.status === statusFilter
+      const textMatch =
+        needle.length === 0 ||
+        job.id.toLowerCase().includes(needle) ||
+        job.model.toLowerCase().includes(needle)
+      return statusMatch && textMatch
+    })
+  }, [jobs, searchQuery, statusFilter])
+
   return (
     <div className="min-h-screen bg-transparent bg-mesh relative">
       <DashboardHeader 
         title="Neural Jobs" 
-        subtitle="Monitor and manage your active inference cycles"
+        subtitle="Monitor and manage your real-time inference cycles"
       />
       
       <div className="relative z-10 px-8 py-8">
@@ -109,16 +129,19 @@ export default function JobsPage() {
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/30 group-focus-within:text-primary transition-colors" />
             <Input
               placeholder="Search by mission ID or model..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
               className="h-12 bg-white/[0.02] border-white/[0.03] pl-11 rounded-2xl focus:ring-primary/20 focus:border-primary/40 text-white/80 placeholder:text-muted-foreground/20 font-medium"
             />
           </div>
           <div className="flex items-center gap-4">
-            <Select defaultValue="all">
-              <SelectTrigger className="h-12 w-48 bg-white/[0.02] border-white/[0.03] rounded-2xl text-[11px] font-semibold text-neutral-500 text-muted-foreground/60 transition-all hover:bg-white/[0.04]">
+            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as JobsFilter)}>
+              <SelectTrigger className="h-12 w-48 bg-white/[0.02] border-white/[0.03] rounded-2xl text-[11px] font-semibold text-muted-foreground/60 transition-all hover:bg-white/[0.04]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent className="bg-[#0c0c0c] border-white/[0.05] rounded-2xl overflow-hidden">
                 <SelectItem value="all" className="text-[10px] capitalize font-semibold tracking-normal text-muted-foreground focus:bg-primary/10 focus:text-primary">All Activity</SelectItem>
+                <SelectItem value="assigned" className="text-[10px] capitalize font-semibold tracking-normal text-muted-foreground focus:bg-primary/10 focus:text-primary">Assigned</SelectItem>
                 <SelectItem value="pending" className="text-[10px] capitalize font-semibold tracking-normal text-muted-foreground focus:bg-primary/10 focus:text-primary">Pending</SelectItem>
                 <SelectItem value="running" className="text-[10px] capitalize font-semibold tracking-normal text-muted-foreground focus:bg-primary/10 focus:text-primary">Running</SelectItem>
                 <SelectItem value="completed" className="text-[10px] capitalize font-semibold tracking-normal text-muted-foreground focus:bg-primary/10 focus:text-primary">Success</SelectItem>
@@ -130,7 +153,31 @@ export default function JobsPage() {
 
         {/* Jobs List */}
         <div className="grid gap-6">
-          {jobs.map((job) => {
+          {!address && !isLoading && (
+            <div className="glass-card p-6 text-xs font-semibold text-slate-300 tracking-normal">
+              Connect your wallet to view your submitted jobs.
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="glass-card p-6 text-xs font-semibold text-slate-300 tracking-normal">
+              Loading jobs from backend...
+            </div>
+          )}
+
+          {loadError && !isLoading && (
+            <div className="glass-card p-6 text-xs font-semibold text-red-300 tracking-normal">
+              {loadError}
+            </div>
+          )}
+
+          {!isLoading && !loadError && address && filteredJobs.length === 0 && (
+            <div className="glass-card p-6 text-xs font-semibold text-slate-300 tracking-normal">
+              No jobs found for this wallet yet.
+            </div>
+          )}
+
+          {filteredJobs.map((job) => {
             const status = statusConfig[job.status as keyof typeof statusConfig]
             const StatusIcon = status.icon
             
@@ -174,7 +221,7 @@ export default function JobsPage() {
                     <div className="flex items-center gap-10">
                       <div className="text-right">
                         <p className="text-lg font-semibold text-white tracking-normal">{job.cost}</p>
-                        <p className="text-[10px] font-semibold text-muted-foreground/20 text-neutral-500 mt-1 italic">{job.createdAt}</p>
+                        <p className="text-[10px] font-semibold text-muted-foreground/20 mt-1 italic">{job.createdAt}</p>
                       </div>
                       <div className="flex gap-3">
                         <Link href={`/buyer/jobs/${job.id}`}>
@@ -182,17 +229,12 @@ export default function JobsPage() {
                             <Eye className="h-5 w-5" />
                           </Button>
                         </Link>
-                        {job.status === 'failed' && (
-                          <Button variant="ghost" className="h-12 w-12 rounded-2xl bg-red-500/5 border border-red-500/10 hover:bg-red-500/10 text-red-400 p-0">
-                            <RotateCcw className="h-5 w-5" />
-                          </Button>
-                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Progress bar for running jobs */}
-                  {job.status === 'running' && (
+                  {/* Progress bar for active jobs */}
+                  {(job.status === 'running' || job.status === 'assigned' || job.status === 'pending') && (
                     <div className="mt-8 pt-8 border-t border-white/5">
                       <div className="flex justify-between text-[10px] font-semibold capitalize tracking-normalr mb-4">
                         <span className="text-primary/60">Optimizing Neural Path</span>
