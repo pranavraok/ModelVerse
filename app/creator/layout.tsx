@@ -8,7 +8,7 @@ export default function CreatorLayout({
   return (
     <div className="min-h-screen bg-background">
       <DashboardSidebar role="creator" />
-      <main className="pl-64">
+      <main className="pl-80">
         {children}
       </main>
     </div>
