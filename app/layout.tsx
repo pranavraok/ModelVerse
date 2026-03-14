@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'NeuralMarket - Decentralized AI Model Marketplace',
+  title: 'ModelVerse - Decentralized AI Marketplace',
   description: 'Upload, monetize, and run AI models with blockchain-powered trust. The future of AI model distribution.',
   generator: 'v0.app',
   icons: {

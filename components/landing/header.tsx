@@ -16,9 +16,9 @@ export function Header() {
           <Image
             src="/logo.png"
             alt="ModelVerse"
-            width={260}
-            height={70}
-            className="h-14 w-auto drop-shadow-[0_0_12px_rgba(139,92,246,0.35)] transition-all duration-300 group-hover:scale-[1.02]"
+            width={300}
+            height={82}
+            className="h-16 w-auto drop-shadow-[0_0_12px_rgba(139,92,246,0.35)] transition-all duration-300 group-hover:scale-[1.02]"
             priority
           />
         </div>

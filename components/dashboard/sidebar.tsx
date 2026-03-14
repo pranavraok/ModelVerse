@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { 
@@ -71,12 +72,18 @@ export function DashboardSidebar({ role }: SidebarProps) {
     <aside className="fixed left-0 top-0 z-40 h-screen w-[320px] border-r border-white/[0.05] bg-[#030303]/80 backdrop-blur-3xl shadow-[4px_0_24px_rgba(0,0,0,0.4)]">
       <div className="flex h-full flex-col">
         {/* Logo */}
-        <div className="flex h-24 items-center gap-5 px-8 pb-4 pt-10 mb-6 relative">
+        <div className="flex h-28 items-center px-6 pb-4 pt-8 mb-6 relative">
           <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
-          <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-primary/20 to-primary/5 border border-primary/30 shadow-[0_0_20px_rgba(139,92,246,0.15)] group-hover:scale-105 transition-all">
-            <Cpu className="h-6 w-6 text-primary drop-shadow-[0_0_8px_rgba(139,92,246,0.5)]" />
+          <div className="relative z-10 w-full">
+            <Image
+              src="/logo.png"
+              alt="ModelVerse"
+              width={420}
+              height={120}
+              className="h-auto w-full object-contain"
+              priority
+            />
           </div>
-          <span className="relative text-[22px] font-bold tracking-tight text-white drop-shadow-md">ModelVerse</span>
         </div>
 
         {/* Navigation */}
