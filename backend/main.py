@@ -23,14 +23,23 @@ from supabase import Client, create_client
 app = FastAPI()
 logger = logging.getLogger("modelverse.web3")
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "https://model-verse-tau.vercel.app",
+]
+
+raw_cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
+if raw_cors_origins:
+    allowed_origins = [origin.strip() for origin in raw_cors_origins.split(",") if origin.strip()]
+else:
+    allowed_origins = DEFAULT_CORS_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
